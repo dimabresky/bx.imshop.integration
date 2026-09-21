@@ -79,11 +79,25 @@ class bx_imshop_integration extends CModule
 
     public function installFiles(): bool
     {
+        $documentRoot = (string) ($_SERVER['DOCUMENT_ROOT'] ?? '');
+        if ($documentRoot === '') {
+            return false;
+        }
+
+        CopyDirFiles(
+            __DIR__ . '/imshop',
+            $documentRoot . '/local/imshop',
+            true,
+            true
+        );
+
         return true;
     }
 
     public function unInstallFiles(): bool
     {
+        DeleteDirFilesEx('/local/imshop');
+
         return true;
     }
 

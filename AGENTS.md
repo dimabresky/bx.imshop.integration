@@ -9,7 +9,7 @@
 - Запросы stateless: каждый POST содержит все данные для ответа. Сессия, cookies и корзина `fuser` не источник данных.
 - Расчёт доставки повторяет последовательность `bitrix:sale.order.ajax` (`initShipment`, `getRestrictedObjectsList`, `calculateDelivery`, `doFinalAction`, склады из `obtainDelivery`) на временном заказе.
 - Временный `Bitrix\Sale\Order` не сохраняется. Вызов `Order::save()` в этом модуле запрещён.
-- Точка входа на сайте — каталог `/local/imshop/<code>/` в репозитории магазина. Роутер модуля — `public/endpoint.php`.
+- Точка входа на сайте — каталог `/local/imshop/<code>/`. Его копирует `installFiles()` из `install/imshop/` и удаляет `unInstallFiles()`. Роутер модуля — `public/endpoint.php`.
 - Секреты (ключ API) только в опциях модуля на стенде, не в репозитории.
 - Ответ webhook не содержит полей заказа, которых нет в контракте IMSHOP для этого endpoint.
 
@@ -21,6 +21,7 @@ bx.imshop.integration/
   options.php
   default_option.php
   public/endpoint.php
+  install/imshop/
   lib/
     Config.php
     Http/
@@ -31,7 +32,7 @@ bx.imshop.integration/
 ```
 
 - Классы — в `lib/`, namespace `Bx\Imshop\Integration`.
-- Новый webhook = класс `WebhookHandlerInterface` в `lib/Webhook/`, регистрация в `Registry` и каталог `/local/imshop/<code>/index.php` в репозитории сайта.
+- Новый webhook = класс `WebhookHandlerInterface` в `lib/Webhook/`, регистрация в `Registry`, каталог `install/imshop/<code>/` и строка в `README.md`. Установка копирует каталог в `/local/imshop/`.
 - `install/index.php` — установка и удаление. Своих таблиц у модуля нет.
 
 ## PSR и стиль кода
@@ -64,7 +65,7 @@ bx.imshop.integration/
 
 - `DoInstall` / `DoUninstall`, `installDB` / `unInstallDB` / `installFiles` / `unInstallFiles` — `public`, как в `CModule`.
 - Опции: ключ API, сайт, типы плательщика, флаг включения. Пустой ключ — ответ 401.
-- Публичный скрипт `/local/imshop/` живёт в репозитории сайта и подключает `public/endpoint.php`, потому что деплой сайта — `rsync` git, а не копирование файлов из админки.
+- `installFiles()` копирует `install/imshop/` в `/local/imshop/`. `unInstallFiles()` удаляет только `/local/imshop/`. После деплоя git URL появляется, когда модуль установлен.
 
 ## Безопасность
 
