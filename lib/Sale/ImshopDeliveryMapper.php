@@ -65,7 +65,12 @@ final class ImshopDeliveryMapper
         }
 
         if ($isPickup && !$skipPickupLocations) {
-            $delivery['locations'] = $this->locations($storeIds, $price, $min ?? 0, $timeLabel, $city);
+            $locations = $this->locations($storeIds, $price, $min ?? 0, $timeLabel, $city);
+            if ($locations === []) {
+                return null;
+            }
+
+            $delivery['locations'] = $locations;
         }
 
         return $delivery;
