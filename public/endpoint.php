@@ -10,6 +10,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
     die();
 }
 
+$webhookCode = basename(dirname((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')));
+
 if (!Loader::includeModule('bx.imshop.integration')) {
     if (!headers_sent()) {
         http_response_code(503);
@@ -17,9 +19,10 @@ if (!Loader::includeModule('bx.imshop.integration')) {
         header('Cache-Control: no-store');
     }
 
+    $listKey = $webhookCode === 'payments' ? 'payments' : 'deliveries';
     echo json_encode(
         [
-            'deliveries' => [],
+            $listKey => [],
             'message' => 'Модуль интеграции IMSHOP не установлен',
         ],
         JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
@@ -28,5 +31,4 @@ if (!Loader::includeModule('bx.imshop.integration')) {
     return;
 }
 
-$webhookCode = basename(dirname((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')));
 (new \Bx\Imshop\Integration\Http\FrontController())->run($webhookCode);
