@@ -13,3 +13,4 @@ Origin: `https://github.com/dimabresky/bx.imshop.integration.git`.
 Список пополняется при добавлении endpoint.
 
 - `POST /local/imshop/deliveries` — расчёт способов доставки. Временный заказ Sale не сохраняется. Цена и пункты самовывоза совпадают с `bitrix:sale.order.ajax`.
+- `POST /local/imshop/payments` — список способов оплаты. Временный заказ Sale не сохраняется. Состав совпадает с ограничениями `bitrix:sale.order.ajax` для выбранной доставки.

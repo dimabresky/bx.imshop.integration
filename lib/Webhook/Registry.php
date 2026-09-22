@@ -13,8 +13,10 @@ final class Registry
     public function __construct()
     {
         $delivery = new DeliveryWebhook();
+        $payment = new PaymentWebhook();
         $this->handlers = [
             $delivery->code() => $delivery,
+            $payment->code() => $payment,
         ];
     }
 

@@ -47,7 +47,7 @@ final class FrontController
                 Config::MODULE_ID
             );
             JsonResponder::send(
-                $this->errorPayload($webhookCode, 'Не удалось рассчитать доставку'),
+                $this->errorPayload($webhookCode, $this->failureMessage($webhookCode)),
                 500
             );
         }
@@ -83,13 +83,22 @@ final class FrontController
      */
     private function errorPayload(string $webhookCode, string $message): array
     {
-        if ($webhookCode === 'deliveries') {
+        if ($webhookCode === 'deliveries' || $webhookCode === 'payments') {
             return [
-                'deliveries' => [],
+                $webhookCode => [],
                 'message' => $message,
             ];
         }
 
         return ['message' => $message];
+    }
+
+    private function failureMessage(string $webhookCode): string
+    {
+        if ($webhookCode === 'payments') {
+            return 'Не удалось рассчитать способы оплаты';
+        }
+
+        return 'Не удалось рассчитать доставку';
     }
 }

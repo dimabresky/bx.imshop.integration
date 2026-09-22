@@ -14,7 +14,7 @@ use Bx\Imshop\Integration\Config;
 use Bx\Imshop\Integration\Http\RequestException;
 
 /**
- * Virtual order for delivery calculation. Order::save() is intentionally absent.
+ * Virtual order for webhook calculation. Order::save() is intentionally absent.
  */
 final class CalculationOrderFactory
 {
@@ -35,7 +35,7 @@ final class CalculationOrderFactory
 
         $lines = $this->items->resolve($payload);
         if ($lines === []) {
-            throw new RequestException('Не удалось собрать корзину для расчёта доставки', 200);
+            throw new RequestException('Не удалось собрать корзину для расчёта', 200);
         }
 
         $locationCode = $this->locations->resolveCode($payload);
@@ -54,7 +54,7 @@ final class CalculationOrderFactory
         $order = Order::create($siteId, $userId > 0 ? $userId : null);
         $personTypeResult = $order->setPersonTypeId($personTypeId);
         if (!$personTypeResult->isSuccess()) {
-            throw new RequestException('Не удалось подготовить заказ для расчёта доставки', 500);
+            throw new RequestException('Не удалось подготовить заказ для расчёта', 500);
         }
 
         $basket = Basket::create($siteId);
@@ -79,7 +79,7 @@ final class CalculationOrderFactory
 
         $basket->refresh(RefreshFactory::create(RefreshFactory::TYPE_FULL));
         if (!$this->hasBuyableItems($basket)) {
-            throw new RequestException('Не удалось собрать корзину для расчёта доставки', 200);
+            throw new RequestException('Не удалось собрать корзину для расчёта', 200);
         }
 
         $this->fillAddress($order, $payload, $locationCode);
@@ -153,7 +153,7 @@ final class CalculationOrderFactory
 
             $quantityResult = $shipmentItem->setQuantity($basketItem->getQuantity());
             if (!$quantityResult->isSuccess()) {
-                throw new RequestException('Не удалось подготовить отгрузку для расчёта доставки', 500);
+                throw new RequestException('Не удалось подготовить отгрузку для расчёта', 500);
             }
         }
     }
