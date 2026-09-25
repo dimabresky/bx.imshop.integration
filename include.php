@@ -10,6 +10,7 @@ use Bx\Imshop\Integration\Http\AuthGuard;
 use Bx\Imshop\Integration\Http\FrontController;
 use Bx\Imshop\Integration\Http\JsonResponder;
 use Bx\Imshop\Integration\Http\RequestException;
+use Bx\Imshop\Integration\Http\RequestLogger;
 use Bx\Imshop\Integration\Sale\CalculationOrderFactory;
 use Bx\Imshop\Integration\Sale\CatalogItemResolver;
 use Bx\Imshop\Integration\Sale\DeliveryCalculator;
@@ -33,6 +34,7 @@ Loader::registerAutoLoadClasses(
         RequestException::class => 'lib/Http/RequestException.php',
         AuthGuard::class => 'lib/Http/AuthGuard.php',
         JsonResponder::class => 'lib/Http/JsonResponder.php',
+        RequestLogger::class => 'lib/Http/RequestLogger.php',
         FrontController::class => 'lib/Http/FrontController.php',
         WebhookHandlerInterface::class => 'lib/Webhook/WebhookHandlerInterface.php',
         Registry::class => 'lib/Webhook/Registry.php',
