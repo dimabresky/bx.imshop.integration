@@ -8,7 +8,7 @@
 - Модуль `bx.imshop.integration` принимает webhook-и [IMSHOP Retail Protocol](https://docs.imshop.io/) от платформы IMSHOP и отвечает JSON.
 - Запросы stateless: каждый POST содержит все данные для ответа. Сессия, cookies и корзина `fuser` не источник данных.
 - Расчёт доставки повторяет последовательность `bitrix:sale.order.ajax` (`initShipment`, `getRestrictedObjectsList`, `calculateDelivery`, `doFinalAction`, склады из `obtainDelivery`) на временном заказе.
-- Временный `Bitrix\Sale\Order` не сохраняется. Вызов `Order::save()` в этом модуле запрещён.
+- Расчёт доставок и оплат не сохраняет заказ. `Order::save()` разрешён только в `OrderCreator`.
 - Точка входа на сайте — каталог `/local/imshop/<code>/`. Его копирует `installFiles()` из `install/imshop/` и удаляет `unInstallFiles()`. Роутер модуля — `public/endpoint.php`.
 - Секреты (ключ API) только в опциях модуля на стенде, не в репозитории.
 - Ответ webhook не содержит полей заказа, которых нет в контракте IMSHOP для этого endpoint.
@@ -59,7 +59,7 @@ bx.imshop.integration/
 - ORM D7 и API Sale/Catalog. Свои таблицы не заводить, пока спецификация webhook этого не требует.
 - Местоположение в свойство заказа с `IS_LOCATION` передаётся кодом справочника, не названием города.
 - Купон запроса — `DiscountCouponsManager` в `MODE_EXTERNAL` на время одного запроса, затем `clear(true)`.
-- `bonusesSpent` в расчёт доставки не входит: списание бонусов Аспро привязано к сессии чекаута.
+- `bonusesSpent` и `authorizedBonuses` не списываются: списание бонусов Аспро привязано к сессии чекаута. `paymentProcessed` заказ оплаченным не помечает.
 
 ## Установка и настройки
 

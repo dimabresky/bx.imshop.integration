@@ -14,3 +14,4 @@ Origin: `https://github.com/dimabresky/bx.imshop.integration.git`.
 
 - `POST /local/imshop/deliveries` — расчёт способов доставки. Временный заказ Sale не сохраняется. Цена и пункты самовывоза совпадают с `bitrix:sale.order.ajax`.
 - `POST /local/imshop/payments` — список способов оплаты. Временный заказ Sale не сохраняется. Состав совпадает с ограничениями `bitrix:sale.order.ajax` для выбранной доставки.
+- `POST /local/imshop/orders` — оформление заказа. Корзина пересчитывается Sale, заказ сохраняется. Повтор с тем же `uuid` возвращает уже созданный заказ. Цены из запроса, бонусы и флаг `paymentProcessed` не применяются.

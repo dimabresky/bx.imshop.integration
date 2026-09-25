@@ -19,7 +19,7 @@ if (!Loader::includeModule('bx.imshop.integration')) {
         header('Cache-Control: no-store');
     }
 
-    $listKey = $webhookCode === 'payments' ? 'payments' : 'deliveries';
+    $listKey = in_array($webhookCode, ['payments', 'orders'], true) ? $webhookCode : 'deliveries';
     echo json_encode(
         [
             $listKey => [],
