@@ -104,7 +104,7 @@ final class FrontController
      */
     private function errorPayload(string $webhookCode, string $message): array
     {
-        if ($webhookCode === 'deliveries' || $webhookCode === 'payments') {
+        if ($webhookCode === 'deliveries' || $webhookCode === 'payments' || $webhookCode === 'orders') {
             return [
                 $webhookCode => [],
                 'message' => $message,
@@ -118,6 +118,10 @@ final class FrontController
     {
         if ($webhookCode === 'payments') {
             return 'Не удалось рассчитать способы оплаты';
+        }
+
+        if ($webhookCode === 'orders') {
+            return 'Не удалось оформить заказ';
         }
 
         return 'Не удалось рассчитать доставку';
