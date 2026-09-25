@@ -17,8 +17,10 @@ final class FrontController
 
     public function run(string $webhookCode): void
     {
+        $method = (string) ($_SERVER['REQUEST_METHOD'] ?? '');
+
         try {
-            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            if ($method !== 'POST') {
                 throw new RequestException('Ожидается POST', 405);
             }
 
@@ -27,6 +29,10 @@ final class FrontController
             }
 
             $payload = $this->readPayload();
+            RequestLogger::info(
+                'request',
+                RequestLogger::requestContext($webhookCode, $method, $payload)
+            );
             AuthGuard::assert($payload);
             unset($payload['key']);
 
@@ -35,19 +41,34 @@ final class FrontController
                 throw new RequestException('Webhook не найден', 404);
             }
 
-            JsonResponder::send($handler->handle($payload));
+            $response = $handler->handle($payload);
+            JsonResponder::send($response);
+            RequestLogger::info('response', [
+                'webhook' => $webhookCode,
+                'status' => 200,
+                'body' => $response,
+            ]);
         } catch (RequestException $exception) {
+            RequestLogger::warning('problem', [
+                'webhook' => $webhookCode,
+                'method' => $method,
+                'status' => $exception->getStatusCode(),
+                'message' => $exception->getMessage(),
+            ]);
             JsonResponder::send(
                 $this->errorPayload($webhookCode, $exception->getMessage()),
                 $exception->getStatusCode()
             );
         } catch (\Throwable $exception) {
-            AddMessage2Log(
-                $exception->getMessage(),
-                Config::MODULE_ID
-            );
+            RequestLogger::error('problem', [
+                'webhook' => $webhookCode,
+                'method' => $method,
+                'status' => 500,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
             JsonResponder::send(
-                $this->errorPayload($webhookCode, 'Не удалось рассчитать доставку'),
+                $this->errorPayload($webhookCode, $this->failureMessage($webhookCode)),
                 500
             );
         }
@@ -83,13 +104,22 @@ final class FrontController
      */
     private function errorPayload(string $webhookCode, string $message): array
     {
-        if ($webhookCode === 'deliveries') {
+        if ($webhookCode === 'deliveries' || $webhookCode === 'payments') {
             return [
-                'deliveries' => [],
+                $webhookCode => [],
                 'message' => $message,
             ];
         }
 
         return ['message' => $message];
+    }
+
+    private function failureMessage(string $webhookCode): string
+    {
+        if ($webhookCode === 'payments') {
+            return 'Не удалось рассчитать способы оплаты';
+        }
+
+        return 'Не удалось рассчитать доставку';
     }
 }

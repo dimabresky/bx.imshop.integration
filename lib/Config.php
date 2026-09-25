@@ -18,6 +18,16 @@ final class Config
         return Option::get(self::MODULE_ID, 'enabled', 'Y') === 'Y';
     }
 
+    public static function isLoggingEnabled(): bool
+    {
+        return Option::get(self::MODULE_ID, 'logging', 'N') === 'Y';
+    }
+
+    public static function isSecretLoggingEnabled(): bool
+    {
+        return Option::get(self::MODULE_ID, 'logging_secrets', 'N') === 'Y';
+    }
+
     public static function getApiKey(): string
     {
         return trim((string) Option::get(self::MODULE_ID, 'api_key', ''));
