@@ -11,7 +11,7 @@ $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_PERSON_TYPE_HINT'] = '0 — первый а
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_PERSON_TYPE_LEGAL'] = 'Тип плательщика (юрлицо)';
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_PERSON_TYPE_LEGAL_HINT'] = 'Используется, когда в запросе доставки legalEntityMode = true. 0 — тот же тип, что у физлица.';
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING'] = 'Вести журнал';
-$MESS['BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_HINT'] = 'Запросы и ошибки пишутся в upload/bx.imshop.integration/.';
+$MESS['BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_HINT'] = 'Запросы и ответы пишутся в logs/bx.imshop.integration/ рядом с корнем сайта, вне публичного каталога. Неожиданные ошибки пишутся туда всегда.';
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_SECRETS'] = 'Писать заголовки и секреты';
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_SECRETS_HINT'] = 'В журнал попадают заголовки запроса, в том числе Authorization, и поле key. Выключено — они не записываются.';
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_SAVED'] = 'Настройки сохранены.';
