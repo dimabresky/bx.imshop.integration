@@ -41,6 +41,8 @@ if (
     Option::set($mid, 'site_id', trim((string) ($_REQUEST['site_id'] ?? '')));
     Option::set($mid, 'person_type_id', (string) max(0, (int) ($_REQUEST['person_type_id'] ?? 0)));
     Option::set($mid, 'person_type_legal_id', (string) max(0, (int) ($_REQUEST['person_type_legal_id'] ?? 0)));
+    Option::set($mid, 'logging', !empty($_REQUEST['logging']) ? 'Y' : 'N');
+    Option::set($mid, 'logging_secrets', !empty($_REQUEST['logging_secrets']) ? 'Y' : 'N');
     $actionMessage = (string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_SAVED');
 }
 
@@ -49,6 +51,8 @@ $apiKey = (string) Option::get($mid, 'api_key', '');
 $siteId = (string) Option::get($mid, 'site_id', '');
 $personTypeId = (string) Option::get($mid, 'person_type_id', '0');
 $personTypeLegalId = (string) Option::get($mid, 'person_type_legal_id', '0');
+$logging = Option::get($mid, 'logging', 'N') === 'Y';
+$loggingSecrets = Option::get($mid, 'logging_secrets', 'N') === 'Y';
 
 $APPLICATION->SetTitle((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_TITLE'));
 
@@ -96,6 +100,20 @@ if ($actionMessage !== '') {
             <td>
                 <input type="number" min="0" name="person_type_legal_id" value="<?= htmlspecialcharsbx($personTypeLegalId) ?>">
                 <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_PERSON_TYPE_LEGAL_HINT')) ?></div>
+            </td>
+        </tr>
+        <tr>
+            <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING')) ?></td>
+            <td>
+                <input type="checkbox" name="logging" value="Y"<?= $logging ? ' checked' : '' ?>>
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_HINT')) ?></div>
+            </td>
+        </tr>
+        <tr>
+            <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_SECRETS')) ?></td>
+            <td>
+                <input type="checkbox" name="logging_secrets" value="Y"<?= $loggingSecrets ? ' checked' : '' ?>>
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_SECRETS_HINT')) ?></div>
             </td>
         </tr>
     </table>
