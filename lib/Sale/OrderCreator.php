@@ -2,6 +2,7 @@
 
 namespace Bx\Imshop\Integration\Sale;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Sale\BasketItem;
 use Bitrix\Sale\Delivery\Services\Manager as DeliveryManager;
@@ -77,6 +78,12 @@ final class OrderCreator
             return $this->failure('', 'order_invalid', 'Не передан идентификатор заказа');
         }
 
+        $connection = Application::getConnection();
+        $lockName = $this->lockName($uuid);
+        if (!$connection->lock($lockName, 15)) {
+            return $this->failure($uuid, 'order_rejected', 'Не удалось оформить заказ');
+        }
+
         try {
             $existing = $this->findByUuid($uuid);
             if ($existing !== null) {
@@ -94,6 +101,8 @@ final class OrderCreator
             ]);
 
             return $this->failure($uuid, 'order_rejected', 'Не удалось оформить заказ');
+        } finally {
+            $connection->unlock($lockName);
         }
     }
 
@@ -131,7 +140,15 @@ final class OrderCreator
                 return $this->failure($uuid, 'save_failed', $this->saveMessage($save->getErrorMessages()));
             }
 
-            $saved = Order::load($order->getId());
+            $savedId = (int) $order->getId();
+            $canonical = $this->findByUuid($uuid);
+            if ($canonical !== null && (int) $canonical->getId() !== $savedId) {
+                Order::delete($savedId);
+
+                return $this->success($canonical, $source);
+            }
+
+            $saved = Order::load($savedId);
 
             return $this->success($saved instanceof Order ? $saved : $order, $source);
         } finally {
@@ -304,6 +321,7 @@ final class OrderCreator
                 '=XML_ID' => $uuid,
                 '=LID' => Config::getSiteId(),
             ],
+            'order' => ['ID' => 'ASC'],
             'limit' => 1,
         ])->fetch();
 
@@ -491,6 +509,11 @@ final class OrderCreator
     private function uuid(array $source): string
     {
         return $this->text($source, 'uuid');
+    }
+
+    private function lockName(string $uuid): string
+    {
+        return 'bx_imshop_order_' . substr(hash('sha256', Config::getSiteId() . ':' . $uuid), 0, 40);
     }
 
     /**
