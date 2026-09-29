@@ -56,24 +56,21 @@ final class AuthGuard
             }
         }
 
-        if (!function_exists('getallheaders')) {
-            return '';
-        }
-
-        $headers = getallheaders();
-        if (!is_array($headers)) {
-            return '';
-        }
-
-        foreach ($headers as $name => $value) {
-            if (!is_string($name) || strcasecmp($name, 'Authorization') !== 0) {
-                continue;
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+            if (is_array($headers)) {
+                foreach ($headers as $name => $value) {
+                    if (!is_string($name) || strcasecmp($name, 'Authorization') !== 0) {
+                        continue;
+                    }
+                    if (is_string($value) || is_numeric($value)) {
+                        $fromHeaders = trim((string) $value);
+                        if ($fromHeaders !== '') {
+                            return $fromHeaders;
+                        }
+                    }
+                }
             }
-            if (!is_string($value) && !is_numeric($value)) {
-                return '';
-            }
-
-            return trim((string) $value);
         }
 
         $redirected = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null;
