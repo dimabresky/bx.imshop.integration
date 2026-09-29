@@ -42,8 +42,8 @@ class bx_imshop_integration extends CModule
         $this->MODULE_NAME = Loc::getMessage('BX_IMSHOP_INTEGRATION_MODULE_NAME') ?: 'IMSHOP webhooks';
         $this->MODULE_DESCRIPTION = Loc::getMessage('BX_IMSHOP_INTEGRATION_MODULE_DESC')
             ?: '1C-Bitrix online store integration with IMSHOP Retail Protocol.';
-        $this->PARTNER_NAME = Loc::getMessage('BX_IMSHOP_INTEGRATION_PARTNER_NAME') ?: 'DNK';
-        $this->PARTNER_URI = Loc::getMessage('BX_IMSHOP_INTEGRATION_PARTNER_URI') ?: 'https://dnk.by';
+        $this->PARTNER_NAME = Loc::getMessage('BX_IMSHOP_INTEGRATION_PARTNER_NAME') ?: 'dimabresky';
+        $this->PARTNER_URI = Loc::getMessage('BX_IMSHOP_INTEGRATION_PARTNER_URI') ?: 'https://github.com/dimabresky/bx.imshop.integration';
     }
 
     public function DoInstall(): bool
