@@ -76,6 +76,11 @@ final class AuthGuard
             return trim((string) $value);
         }
 
+        $redirected = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null;
+        if (is_string($redirected) && trim($redirected) !== '') {
+            return trim($redirected);
+        }
+
         return '';
     }
 }
