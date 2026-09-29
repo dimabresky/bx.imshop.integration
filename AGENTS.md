@@ -61,6 +61,18 @@ bx.imshop.integration/
 - Купон запроса — `DiscountCouponsManager` в `MODE_EXTERNAL` на время одного запроса, затем `clear(true)`.
 - `bonusesSpent` и `authorizedBonuses` не списываются: списание бонусов Аспро привязано к сессии чекаута. `paymentProcessed` заказ оплаченным не помечает.
 
+## HTTP-запрос
+
+Заголовки и сырое тело входящего webhook читать через D7 [`\Bitrix\Main\HttpRequest`](https://dev.1c-bitrix.ru/api_d7/bitrix/main/httprequest/index.php) ([класс](https://doc.budagov.ru/class_bitrix_1_1_main_1_1_http_request.html)):
+
+```php
+$request = \Bitrix\Main\Application::getInstance()->getContext()->getRequest();
+```
+
+- Один заголовок — `getHeader($name)`, список — `getHeaders()`.
+- Сырое тело — `HttpRequest::getInput()`.
+- Не читать заголовки из `$_SERVER['HTTP_*']` и `getallheaders()`, тело — из `php://input` и `file_get_contents`.
+
 ## Установка и настройки
 
 - `DoInstall` / `DoUninstall`, `installDB` / `unInstallDB` / `installFiles` / `unInstallFiles` — `public`, как в `CModule`.
