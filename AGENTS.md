@@ -72,6 +72,7 @@ $request = \Bitrix\Main\Application::getInstance()->getContext()->getRequest();
 - Один заголовок — `getHeader($name)`, список — `getHeaders()`.
 - Сырое тело — `HttpRequest::getInput()`.
 - Не читать заголовки из `$_SERVER['HTTP_*']` и `getallheaders()`, тело — из `php://input` и `file_get_contents`.
+- Если `getHeader('Authorization')` пустой, этот заголовок можно добрать через `getallheaders()`: ядро копирует в `HttpRequest` только `$_SERVER['HTTP_*']`, а Apache часто не кладёт туда `Authorization`.
 
 ## Установка и настройки
 

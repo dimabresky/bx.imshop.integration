@@ -2,6 +2,8 @@
 
 namespace Bx\Imshop\Integration\Http;
 
+use Bitrix\Main\Application;
+use Bitrix\Main\HttpRequest;
 use Bx\Imshop\Integration\Config;
 
 /**
@@ -30,7 +32,7 @@ final class AuthGuard
      */
     private static function providedKey(array $payload): string
     {
-        $header = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        $header = self::authorizationHeader();
         if (preg_match('/^Bearer\s+(\S+)/i', $header, $matches) === 1) {
             return $matches[1];
         }
@@ -38,5 +40,42 @@ final class AuthGuard
         $bodyKey = $payload['key'] ?? null;
 
         return is_string($bodyKey) ? trim($bodyKey) : '';
+    }
+
+    /**
+     * HttpRequest copies only $_SERVER HTTP_* keys. Apache often omits Authorization there
+     * while getallheaders() still returns it.
+     */
+    private static function authorizationHeader(): string
+    {
+        $request = Application::getInstance()->getContext()->getRequest();
+        if ($request instanceof HttpRequest) {
+            $header = $request->getHeader('Authorization');
+            if (is_string($header) && trim($header) !== '') {
+                return trim($header);
+            }
+        }
+
+        if (!function_exists('getallheaders')) {
+            return '';
+        }
+
+        $headers = getallheaders();
+        if (!is_array($headers)) {
+            return '';
+        }
+
+        foreach ($headers as $name => $value) {
+            if (!is_string($name) || strcasecmp($name, 'Authorization') !== 0) {
+                continue;
+            }
+            if (!is_string($value) && !is_numeric($value)) {
+                return '';
+            }
+
+            return trim((string) $value);
+        }
+
+        return '';
     }
 }
