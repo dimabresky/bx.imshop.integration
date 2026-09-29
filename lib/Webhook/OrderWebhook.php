@@ -5,7 +5,7 @@ namespace Bx\Imshop\Integration\Webhook;
 use Bx\Imshop\Integration\Sale\OrderCreator;
 
 /**
- * POST /local/imshop/orders
+ * POST /local/imshop/orders/create
  */
 final class OrderWebhook implements WebhookHandlerInterface
 {
@@ -15,6 +15,11 @@ final class OrderWebhook implements WebhookHandlerInterface
     }
 
     public function code(): string
+    {
+        return 'orders/create';
+    }
+
+    public function responseKey(): string
     {
         return 'orders';
     }

@@ -104,14 +104,15 @@ final class FrontController
      */
     private function errorPayload(string $webhookCode, string $message): array
     {
-        if ($webhookCode === 'deliveries' || $webhookCode === 'payments' || $webhookCode === 'orders') {
-            return [
-                $webhookCode => [],
-                'message' => $message,
-            ];
+        $listKey = $this->registry->get($webhookCode)?->responseKey() ?? '';
+        if ($listKey === '') {
+            return ['message' => $message];
         }
 
-        return ['message' => $message];
+        return [
+            $listKey => [],
+            'message' => $message,
+        ];
     }
 
     private function failureMessage(string $webhookCode): string
@@ -120,7 +121,7 @@ final class FrontController
             return 'Не удалось рассчитать способы оплаты';
         }
 
-        if ($webhookCode === 'orders') {
+        if ($webhookCode === 'orders/create') {
             return 'Не удалось оформить заказ';
         }
 

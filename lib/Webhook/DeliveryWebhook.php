@@ -19,6 +19,11 @@ final class DeliveryWebhook implements WebhookHandlerInterface
         return 'deliveries';
     }
 
+    public function responseKey(): string
+    {
+        return $this->code();
+    }
+
     /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
