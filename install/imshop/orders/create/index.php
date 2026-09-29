@@ -2,6 +2,7 @@
 
 /**
  * IMSHOP order placement webhook. Business logic lives in bx.imshop.integration.
+ * Public URL: POST /local/imshop/orders/create
  */
 
 define('NO_KEEP_STATISTIC', true);
