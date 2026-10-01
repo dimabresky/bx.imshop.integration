@@ -75,4 +75,27 @@ final class Config
 
         return $firstId > 0 ? $firstId : max(0, $configured);
     }
+
+    /**
+     * Delivery service ids marked as pickup points in the module settings.
+     *
+     * @return list<int>
+     */
+    public static function pickupDeliveryIds(): array
+    {
+        $raw = (string) Option::get(self::MODULE_ID, 'pickup_delivery_ids', '');
+        $ids = [];
+        foreach (preg_split('/\s*,\s*/', $raw) ?: [] as $part) {
+            if (is_numeric($part) && (int) $part > 0) {
+                $ids[] = (int) $part;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    public static function isPickupDelivery(int $deliveryId): bool
+    {
+        return $deliveryId > 0 && in_array($deliveryId, self::pickupDeliveryIds(), true);
+    }
 }

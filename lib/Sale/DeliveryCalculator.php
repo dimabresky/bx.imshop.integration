@@ -72,10 +72,11 @@ final class DeliveryCalculator
         $services = DeliveryManager::getRestrictedObjectsList($shipment);
         $skipPickupLocations = ($payload['skipPickupLocations'] ?? false) === true;
         $city = $this->locations->cityName($payload);
+        $coordinates = $this->locations->coordinates($payload);
         $deliveries = [];
 
         foreach ($services as $service) {
-            $quoted = $this->quoteService($order, $service, $skipPickupLocations, $city);
+            $quoted = $this->quoteService($order, $service, $skipPickupLocations, $city, $coordinates);
             if ($quoted !== null) {
                 $deliveries[] = $quoted;
             }
@@ -92,9 +93,16 @@ final class DeliveryCalculator
     }
 
     /**
+     * @param array{lat: float, lon: float}|null $coordinates
      * @return array<string, mixed>|null
      */
-    private function quoteService(Order $order, \Bitrix\Sale\Delivery\Services\Base $service, bool $skipPickupLocations, string $city): ?array
+    private function quoteService(
+        Order $order,
+        \Bitrix\Sale\Delivery\Services\Base $service,
+        bool $skipPickupLocations,
+        string $city,
+        ?array $coordinates,
+    ): ?array
     {
         $clone = $order->createClone();
         $shipment = $this->currentShipment($clone);
@@ -129,7 +137,15 @@ final class DeliveryCalculator
 
         $clone->doFinalAction(true);
 
-        return $this->mapper->map($service, $calculation, $clone, $skipPickupLocations, $city);
+        return $this->mapper->map(
+            $service,
+            $calculation,
+            $clone,
+            $skipPickupLocations,
+            $city,
+            is_array($coordinates) ? $coordinates['lat'] : null,
+            is_array($coordinates) ? $coordinates['lon'] : null,
+        );
     }
 
     private function currentShipment(Order $order): ?Shipment

@@ -14,4 +14,6 @@ $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING'] = 'Вести журнал';
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_HINT'] = 'Запросы и ответы пишутся в /upload/bx.imshop.integration/ в корне сайта. Неожиданные ошибки пишутся туда всегда.';
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_SECRETS'] = 'Писать заголовки и секреты';
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_SECRETS_HINT'] = 'В журнал попадают заголовки запроса, в том числе Authorization, и поле key. Выключено — они не записываются.';
+$MESS['BX_IMSHOP_INTEGRATION_OPTIONS_PICKUP_DELIVERIES'] = 'Службы доставки ПВЗ';
+$MESS['BX_IMSHOP_INTEGRATION_OPTIONS_PICKUP_DELIVERIES_HINT'] = 'Эти службы отдаются как самовывоз, даже если у них нет складов Bitrix. Укажите id профиля — тот же, что уходит в deliveries[].id. Складской самовывоз работает и без этой отметки.';
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_SAVED'] = 'Настройки сохранены.';

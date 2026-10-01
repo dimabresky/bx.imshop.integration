@@ -7,6 +7,7 @@
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bx\Imshop\Integration\Config;
 
 global $APPLICATION;
 
@@ -43,6 +44,9 @@ if (
     Option::set($mid, 'person_type_legal_id', (string) max(0, (int) ($_REQUEST['person_type_legal_id'] ?? 0)));
     Option::set($mid, 'logging', !empty($_REQUEST['logging']) ? 'Y' : 'N');
     Option::set($mid, 'logging_secrets', !empty($_REQUEST['logging_secrets']) ? 'Y' : 'N');
+    if (Loader::includeModule('sale')) {
+        Option::set($mid, 'pickup_delivery_ids', implode(',', pickupDeliveryIdsFromRequest()));
+    }
     $actionMessage = (string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_SAVED');
 }
 
@@ -53,6 +57,8 @@ $personTypeId = (string) Option::get($mid, 'person_type_id', '0');
 $personTypeLegalId = (string) Option::get($mid, 'person_type_legal_id', '0');
 $logging = Option::get($mid, 'logging', 'N') === 'Y';
 $loggingSecrets = Option::get($mid, 'logging_secrets', 'N') === 'Y';
+$pickupDeliveryIds = array_fill_keys(Config::pickupDeliveryIds(), true);
+$deliveryServices = activeDeliveryServices();
 
 $APPLICATION->SetTitle((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_TITLE'));
 
@@ -103,6 +109,19 @@ if ($actionMessage !== '') {
             </td>
         </tr>
         <tr>
+            <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_PICKUP_DELIVERIES')) ?></td>
+            <td>
+                <select name="pickup_delivery_ids[]" multiple size="8">
+                    <?php foreach ($deliveryServices as $deliveryId => $deliveryName) { ?>
+                        <option value="<?= (int) $deliveryId ?>"<?= isset($pickupDeliveryIds[$deliveryId]) ? ' selected' : '' ?>>
+                            <?= htmlspecialcharsbx($deliveryId . ' — ' . $deliveryName) ?>
+                        </option>
+                    <?php } ?>
+                </select>
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_PICKUP_DELIVERIES_HINT')) ?></div>
+            </td>
+        </tr>
+        <tr>
             <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING')) ?></td>
             <td>
                 <input type="checkbox" name="logging" value="Y"<?= $logging ? ' checked' : '' ?>>
@@ -121,3 +140,52 @@ if ($actionMessage !== '') {
 </form>
 <?php
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/epilog_admin.php';
+
+/**
+ * @return list<int>
+ */
+function pickupDeliveryIdsFromRequest(): array
+{
+    $picked = $_REQUEST['pickup_delivery_ids'] ?? [];
+    if (!is_array($picked)) {
+        return [];
+    }
+
+    $ids = [];
+    foreach ($picked as $id) {
+        if (is_numeric($id) && (int) $id > 0) {
+            $ids[] = (int) $id;
+        }
+    }
+
+    return array_values(array_unique($ids));
+}
+
+/**
+ * @return array<int, string>
+ */
+function activeDeliveryServices(): array
+{
+    if (!Loader::includeModule('sale')) {
+        return [];
+    }
+
+    $services = [];
+    $rows = \Bitrix\Sale\Delivery\Services\Table::getList([
+        'select' => ['ID', 'NAME'],
+        'filter' => ['=ACTIVE' => 'Y'],
+        'order' => ['SORT' => 'ASC', 'NAME' => 'ASC'],
+    ]);
+    while ($row = $rows->fetch()) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $id = (int) ($row['ID'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+        $services[$id] = trim((string) ($row['NAME'] ?? ''));
+    }
+
+    return $services;
+}
