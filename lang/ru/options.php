@@ -16,4 +16,6 @@ $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_SECRETS'] = 'Писать заго�
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_SECRETS_HINT'] = 'В журнал попадают заголовки запроса, в том числе Authorization, и поле key. Выключено — они не записываются.';
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_PICKUP_DELIVERIES'] = 'Службы доставки ПВЗ';
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_PICKUP_DELIVERIES_HINT'] = 'Эти службы отдаются как самовывоз, даже если у них нет складов Bitrix. Укажите id профиля — тот же, что уходит в deliveries[].id. Складской самовывоз работает и без этой отметки.';
+$MESS['BX_IMSHOP_INTEGRATION_OPTIONS_STORES_FULL_BASKET'] = 'Только склады со всеми товарами';
+$MESS['BX_IMSHOP_INTEGRATION_OPTIONS_STORES_FULL_BASKET_HINT'] = 'В штатном списке складов службы остаются склады, где свободный остаток каждого товара корзины не меньше заказанного количества. Точки из обработчиков onPickupLocationsBuild не фильтруются.';
 $MESS['BX_IMSHOP_INTEGRATION_OPTIONS_SAVED'] = 'Настройки сохранены.';
