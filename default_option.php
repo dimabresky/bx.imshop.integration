@@ -8,4 +8,5 @@ $bx_imshop_integration_default_option = [
     'person_type_legal_id' => '0',
     'logging' => 'N',
     'logging_secrets' => 'N',
+    'pickup_delivery_ids' => '',
 ];

@@ -2,6 +2,8 @@
 
 namespace Bx\Imshop\Integration\Sale;
 
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
 use Bitrix\Sale\Delivery\CalculationResult;
 use Bitrix\Sale\Delivery\ExtraServices\Manager as ExtraServicesManager;
@@ -15,6 +17,10 @@ use Bx\Imshop\Integration\Config;
  */
 final class ImshopDeliveryMapper
 {
+    private const PICKUP_RADIUS_KM = 10.0;
+
+    private const PICKUP_NEAREST_LIMIT = 10;
+
     /**
      * @return array<string, mixed>|null
      */
@@ -24,6 +30,8 @@ final class ImshopDeliveryMapper
         Order $order,
         bool $skipPickupLocations,
         string $city,
+        ?float $latitude,
+        ?float $longitude,
     ): ?array {
         if (!$calculation->isSuccess()) {
             return null;
@@ -36,7 +44,7 @@ final class ImshopDeliveryMapper
         }
 
         $storeIds = $this->storeIds($service->getId());
-        $isPickup = $storeIds !== [];
+        $isPickup = $storeIds !== [] || Config::isPickupDelivery($service->getId());
         $price = $this->customerPrice($calculation, $order);
         $min = $this->toDays($calculation->getPeriodFrom(), (string) $calculation->getPeriodType());
 
@@ -66,6 +74,19 @@ final class ImshopDeliveryMapper
 
         if ($isPickup && !$skipPickupLocations) {
             $locations = $this->locations($storeIds, $price, $min ?? 0, $timeLabel, $city);
+            $locations = $this->collectFromEvent(
+                $service,
+                $order,
+                $locations,
+                $city,
+                $price,
+                $min ?? 0,
+                $timeLabel,
+                $latitude,
+                $longitude,
+            );
+            $locations = $this->normalizeLocations($locations, $price, $min ?? 0, $timeLabel, $city);
+            $locations = $this->nearest($locations, $latitude, $longitude);
             if ($locations === []) {
                 return null;
             }
@@ -191,12 +212,182 @@ final class ImshopDeliveryMapper
     }
 
     /**
+     * @param list<array<string, mixed>> $locations
+     * @return list<array<string, mixed>>
+     */
+    private function collectFromEvent(
+        Base $service,
+        Order $order,
+        array $locations,
+        string $city,
+        float $price,
+        int $min,
+        string $timeLabel,
+        ?float $latitude,
+        ?float $longitude,
+    ): array {
+        $event = new Event(Config::MODULE_ID, 'onPickupLocationsBuild', [
+            'DELIVERY_ID' => $service->getId(),
+            'DELIVERY_CLASS' => get_class($service),
+            'DELIVERY_NAME' => $service->isProfile() ? $service->getNameWithParent() : $service->getName(),
+            'LOCATIONS' => $locations,
+            'CITY' => $city,
+            'LOCATION_CODE' => $this->locationCode($order),
+            'PRICE' => $price,
+            'MIN' => $min,
+            'TIME_LABEL' => $timeLabel,
+            'LAT' => $latitude,
+            'LON' => $longitude,
+            'ORDER' => $order,
+        ]);
+        $event->send();
+
+        foreach ($event->getResults() as $result) {
+            if (!$result instanceof EventResult || $result->getType() !== EventResult::SUCCESS) {
+                continue;
+            }
+
+            $parameters = $result->getParameters();
+            if (!is_array($parameters) || !array_key_exists('LOCATIONS', $parameters) || !is_array($parameters['LOCATIONS'])) {
+                continue;
+            }
+
+            $locations = $parameters['LOCATIONS'];
+        }
+
+        return $locations;
+    }
+
+    /**
+     * @param mixed $locations
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeLocations(mixed $locations, float $price, int $min, string $timeLabel, string $city): array
+    {
+        if (!is_array($locations)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($locations as $location) {
+            if (!is_array($location)) {
+                continue;
+            }
+
+            $id = trim((string) ($location['id'] ?? ''));
+            $title = $this->plainText((string) ($location['title'] ?? ''));
+            $address = $this->plainText((string) ($location['address'] ?? ''));
+            $pointCity = $this->plainText((string) ($location['city'] ?? ''));
+            if ($pointCity === '') {
+                $pointCity = $city;
+            }
+
+            $lat = trim((string) ($location['lat'] ?? ''));
+            $lon = trim((string) ($location['lon'] ?? ''));
+            if ($id === '' || $title === '' || $address === '' || $pointCity === '' || !$this->isCoordinatePair($lat, $lon)) {
+                continue;
+            }
+
+            $item = [
+                'id' => $id,
+                'title' => $title,
+                'address' => $address,
+                'city' => $pointCity,
+                'lat' => $lat,
+                'lon' => $lon,
+                'price' => isset($location['price']) && is_numeric($location['price']) ? (float) $location['price'] : $price,
+                'min' => isset($location['min']) && is_numeric($location['min']) ? (int) $location['min'] : $min,
+            ];
+
+            $time = $this->plainText((string) ($location['time'] ?? ''));
+            if ($time !== '') {
+                $item['time'] = $time;
+            }
+
+            $label = $this->plainText((string) ($location['timeLabel'] ?? ''));
+            if ($label === '') {
+                $label = $timeLabel;
+            }
+            if ($label !== '') {
+                $item['timeLabel'] = $label;
+            }
+
+            $normalized[] = $item;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $locations
+     * @return list<array<string, mixed>>
+     */
+    private function nearest(array $locations, ?float $latitude, ?float $longitude): array
+    {
+        if ($latitude === null || $longitude === null) {
+            return $locations;
+        }
+
+        $ranked = [];
+        foreach ($locations as $location) {
+            $distance = $this->distanceKm(
+                $latitude,
+                $longitude,
+                (float) $location['lat'],
+                (float) $location['lon'],
+            );
+            if ($distance <= self::PICKUP_RADIUS_KM) {
+                $ranked[] = ['distance' => $distance, 'location' => $location];
+            }
+        }
+
+        usort(
+            $ranked,
+            static fn (array $left, array $right): int => $left['distance'] <=> $right['distance']
+        );
+
+        $nearest = [];
+        foreach (array_slice($ranked, 0, self::PICKUP_NEAREST_LIMIT) as $row) {
+            $nearest[] = $row['location'];
+        }
+
+        return $nearest;
+    }
+
+    private function distanceKm(float $fromLat, float $fromLon, float $toLat, float $toLon): float
+    {
+        $earthRadiusKm = 6371.0;
+        $latDelta = deg2rad($toLat - $fromLat);
+        $lonDelta = deg2rad($toLon - $fromLon);
+        $haversine = sin($latDelta / 2) ** 2
+            + cos(deg2rad($fromLat)) * cos(deg2rad($toLat)) * sin($lonDelta / 2) ** 2;
+
+        return $earthRadiusKm * (2 * atan2(sqrt($haversine), sqrt(1 - $haversine)));
+    }
+
+    private function locationCode(Order $order): string
+    {
+        $location = $order->getPropertyCollection()->getDeliveryLocation();
+        if ($location === null) {
+            return '';
+        }
+
+        return trim((string) $location->getValue());
+    }
+
+    /**
      * @param array<string, mixed> $store
      */
     private function hasCoordinates(array $store): bool
     {
-        $lat = trim((string) ($store['GPS_N'] ?? ''));
-        $lon = trim((string) ($store['GPS_S'] ?? ''));
+        return $this->isCoordinatePair(
+            trim((string) ($store['GPS_N'] ?? '')),
+            trim((string) ($store['GPS_S'] ?? '')),
+        );
+    }
+
+    private function isCoordinatePair(string $lat, string $lon): bool
+    {
         if ($lat === '' || $lon === '' || !is_numeric($lat) || !is_numeric($lon)) {
             return false;
         }
