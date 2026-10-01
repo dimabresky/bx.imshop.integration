@@ -8,6 +8,7 @@ use Bitrix\Sale\Delivery\Services\Manager as DeliveryManager;
 use Bitrix\Sale\DiscountCouponsManager;
 use Bitrix\Sale\Order;
 use Bitrix\Sale\Shipment;
+use Bx\Imshop\Integration\Config;
 use Bx\Imshop\Integration\Http\RequestException;
 
 /**
@@ -20,6 +21,7 @@ final class DeliveryCalculator
         private readonly CalculationOrderFactory $orders = new CalculationOrderFactory(),
         private readonly ImshopDeliveryMapper $mapper = new ImshopDeliveryMapper(),
         private readonly LocationResolver $locations = new LocationResolver(),
+        private readonly StoreStockFilter $stores = new StoreStockFilter(),
     ) {
     }
 
@@ -114,6 +116,10 @@ final class DeliveryCalculator
         $storeIds = \Bitrix\Sale\Delivery\ExtraServices\Manager::getStoresList($service->getId());
         if (is_array($storeIds) && $storeIds !== []) {
             $firstStoreId = (int) reset($storeIds);
+            if (Config::requireStoresWithAllProducts()) {
+                $ids = $this->stores->havingAllProducts($this->storeIds($storeIds), $clone);
+                $firstStoreId = $ids[0] ?? 0;
+            }
             if ($firstStoreId > 0) {
                 $shipment->setStoreId($firstStoreId);
             }
@@ -146,6 +152,22 @@ final class DeliveryCalculator
             is_array($coordinates) ? $coordinates['lat'] : null,
             is_array($coordinates) ? $coordinates['lon'] : null,
         );
+    }
+
+    /**
+     * @param array<mixed> $storeIds
+     * @return list<int>
+     */
+    private function storeIds(array $storeIds): array
+    {
+        $ids = [];
+        foreach ($storeIds as $storeId) {
+            if (is_numeric($storeId) && (int) $storeId > 0) {
+                $ids[] = (int) $storeId;
+            }
+        }
+
+        return $ids;
     }
 
     private function currentShipment(Order $order): ?Shipment

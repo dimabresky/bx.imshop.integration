@@ -98,4 +98,13 @@ final class Config
     {
         return $deliveryId > 0 && in_array($deliveryId, self::pickupDeliveryIds(), true);
     }
+
+    /**
+     * Keep Bitrix stores that can fulfill every buyable basket line.
+     * Pickup points added by onPickupLocationsBuild are not affected.
+     */
+    public static function requireStoresWithAllProducts(): bool
+    {
+        return Option::get(self::MODULE_ID, 'stores_require_all_products', 'N') === 'Y';
+    }
 }

@@ -19,6 +19,7 @@ use Bx\Imshop\Integration\Sale\ImshopPaymentMapper;
 use Bx\Imshop\Integration\Sale\LocationResolver;
 use Bx\Imshop\Integration\Sale\OrderCreator;
 use Bx\Imshop\Integration\Sale\PaymentCalculator;
+use Bx\Imshop\Integration\Sale\StoreStockFilter;
 use Bx\Imshop\Integration\Webhook\DeliveryWebhook;
 use Bx\Imshop\Integration\Webhook\OrderWebhook;
 use Bx\Imshop\Integration\Webhook\PaymentWebhook;
@@ -50,6 +51,7 @@ Loader::registerAutoLoadClasses(
         DeliveryCalculator::class => 'lib/Sale/DeliveryCalculator.php',
         ImshopPaymentMapper::class => 'lib/Sale/ImshopPaymentMapper.php',
         PaymentCalculator::class => 'lib/Sale/PaymentCalculator.php',
+        StoreStockFilter::class => 'lib/Sale/StoreStockFilter.php',
         OrderCreator::class => 'lib/Sale/OrderCreator.php',
     ]
 );

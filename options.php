@@ -44,6 +44,7 @@ if (
     Option::set($mid, 'person_type_legal_id', (string) max(0, (int) ($_REQUEST['person_type_legal_id'] ?? 0)));
     Option::set($mid, 'logging', !empty($_REQUEST['logging']) ? 'Y' : 'N');
     Option::set($mid, 'logging_secrets', !empty($_REQUEST['logging_secrets']) ? 'Y' : 'N');
+    Option::set($mid, 'stores_require_all_products', !empty($_REQUEST['stores_require_all_products']) ? 'Y' : 'N');
     if (Loader::includeModule('sale')) {
         Option::set($mid, 'pickup_delivery_ids', implode(',', pickupDeliveryIdsFromRequest()));
     }
@@ -57,6 +58,7 @@ $personTypeId = (string) Option::get($mid, 'person_type_id', '0');
 $personTypeLegalId = (string) Option::get($mid, 'person_type_legal_id', '0');
 $logging = Option::get($mid, 'logging', 'N') === 'Y';
 $loggingSecrets = Option::get($mid, 'logging_secrets', 'N') === 'Y';
+$storesRequireAllProducts = Option::get($mid, 'stores_require_all_products', 'N') === 'Y';
 $pickupDeliveryIds = array_fill_keys(Config::pickupDeliveryIds(), true);
 $deliveryServices = activeDeliveryServices();
 
@@ -119,6 +121,13 @@ if ($actionMessage !== '') {
                     <?php } ?>
                 </select>
                 <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_PICKUP_DELIVERIES_HINT')) ?></div>
+            </td>
+        </tr>
+        <tr>
+            <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STORES_FULL_BASKET')) ?></td>
+            <td>
+                <input type="checkbox" name="stores_require_all_products" value="Y"<?= $storesRequireAllProducts ? ' checked' : '' ?>>
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STORES_FULL_BASKET_HINT')) ?></div>
             </td>
         </tr>
         <tr>

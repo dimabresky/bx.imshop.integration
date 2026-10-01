@@ -21,6 +21,11 @@ final class ImshopDeliveryMapper
 
     private const PICKUP_NEAREST_LIMIT = 10;
 
+    public function __construct(
+        private readonly StoreStockFilter $stores = new StoreStockFilter(),
+    ) {
+    }
+
     /**
      * @return array<string, mixed>|null
      */
@@ -45,6 +50,9 @@ final class ImshopDeliveryMapper
 
         $storeIds = $this->storeIds($service->getId());
         $isPickup = $storeIds !== [] || Config::isPickupDelivery($service->getId());
+        if (Config::requireStoresWithAllProducts()) {
+            $storeIds = $this->stores->havingAllProducts($storeIds, $order);
+        }
         $price = $this->customerPrice($calculation, $order);
         $min = $this->toDays($calculation->getPeriodFrom(), (string) $calculation->getPeriodType());
 
