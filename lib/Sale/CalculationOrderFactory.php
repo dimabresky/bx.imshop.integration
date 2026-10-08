@@ -25,21 +25,25 @@ final class CalculationOrderFactory
     }
 
     /**
+     * Delivery and payment quotes require a location and at least one buyable line.
+     * Basket recalculation can omit both: the cart screen opens before an address,
+     * and a cart of only deferred lines still needs a successful response.
+     *
      * @param array<string, mixed> $payload
      */
-    public function create(array $payload): Order
+    public function create(array $payload, bool $requireLocation = true, bool $requireItems = true): Order
     {
         if (!Loader::includeModule('sale') || !Loader::includeModule('catalog')) {
             throw new RequestException('Модули магазина недоступны', 503);
         }
 
         $lines = $this->items->resolve($payload);
-        if ($lines === []) {
+        if ($lines === [] && $requireItems) {
             throw new RequestException('Не удалось собрать корзину для расчёта', 200);
         }
 
         $locationCode = $this->locations->resolveCode($payload);
-        if ($locationCode === null) {
+        if ($locationCode === null && $requireLocation) {
             throw new RequestException('В выбранный регион доставка не осуществляется', 200);
         }
 
@@ -66,23 +70,33 @@ final class CalculationOrderFactory
 
         foreach ($lines as $line) {
             $basketItem = $basket->createItem('catalog', $line['productId']);
-            $fieldsResult = $basketItem->setFields([
+            $fields = [
                 'QUANTITY' => $line['quantity'],
                 'CURRENCY' => $order->getCurrency(),
                 'LID' => $siteId,
                 'PRODUCT_PROVIDER_CLASS' => $provider,
-            ]);
+            ];
+            $lineKey = $line['lineKey'] ?? null;
+            if (is_string($lineKey) && $lineKey !== '') {
+                $fields['XML_ID'] = $lineKey;
+            }
+
+            $fieldsResult = $basketItem->setFields($fields);
             if (!$fieldsResult->isSuccess()) {
                 $basketItem->delete();
             }
         }
 
-        $basket->refresh(RefreshFactory::create(RefreshFactory::TYPE_FULL));
-        if (!$this->hasBuyableItems($basket)) {
+        if ($basket->count() > 0) {
+            $basket->refresh(RefreshFactory::create(RefreshFactory::TYPE_FULL));
+        }
+        if ($requireItems && !$this->hasBuyableItems($basket)) {
             throw new RequestException('Не удалось собрать корзину для расчёта', 200);
         }
 
-        $this->fillAddress($order, $payload, $locationCode);
+        if ($locationCode !== null) {
+            $this->fillAddress($order, $payload, $locationCode);
+        }
         $this->createShipment($order);
 
         return $order;
