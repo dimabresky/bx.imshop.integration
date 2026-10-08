@@ -25,6 +25,19 @@ final class DeliveryWebhook implements WebhookHandlerInterface
     }
 
     /**
+     * @return list<string>
+     */
+    public function responseListKeys(): array
+    {
+        return [$this->responseKey()];
+    }
+
+    public function failureMessage(): string
+    {
+        return 'Не удалось рассчитать доставку';
+    }
+
+    /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */

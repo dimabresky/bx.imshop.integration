@@ -104,27 +104,32 @@ final class FrontController
      */
     private function errorPayload(string $webhookCode, string $message): array
     {
-        $listKey = $this->registry->get($webhookCode)?->responseKey() ?? '';
-        if ($listKey === '') {
+        $handler = $this->registry->get($webhookCode);
+        $keys = $handler?->responseListKeys() ?? [];
+        if ($keys === []) {
+            $listKey = $handler?->responseKey() ?? '';
+            $keys = $listKey !== '' ? [$listKey] : [];
+        }
+
+        if ($keys === []) {
             return ['message' => $message];
         }
 
-        return [
-            $listKey => [],
-            'message' => $message,
-        ];
+        $payload = [];
+        foreach ($keys as $key) {
+            if ($key !== '') {
+                $payload[$key] = [];
+            }
+        }
+        $payload['message'] = $message;
+
+        return $payload;
     }
 
     private function failureMessage(string $webhookCode): string
     {
-        if ($webhookCode === 'payments') {
-            return 'Не удалось рассчитать способы оплаты';
-        }
+        $message = $this->registry->get($webhookCode)?->failureMessage() ?? '';
 
-        if ($webhookCode === 'orders/create') {
-            return 'Не удалось оформить заказ';
-        }
-
-        return 'Не удалось рассчитать доставку';
+        return $message !== '' ? $message : 'Не удалось рассчитать доставку';
     }
 }
