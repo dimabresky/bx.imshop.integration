@@ -446,6 +446,9 @@ final class BasketCalculator
 
         $shipment->setField('CUSTOM_PRICE_DELIVERY', 'N');
         $storeId = $this->positiveId($payload['deliveryPickupId'] ?? null);
+        if ($storeId <= 0) {
+            $storeId = $this->positiveId($payload['pickupLocationId'] ?? null);
+        }
         if ($storeId > 0) {
             $shipment->setStoreId($storeId);
         }
