@@ -24,16 +24,23 @@ if (!Loader::includeModule('bx.imshop.integration')) {
         header('Cache-Control: no-store');
     }
 
-    $listKey = $webhookCode === 'payments'
-        ? 'payments'
-        : (str_starts_with($webhookCode, 'orders/') ? 'orders' : 'deliveries');
-    echo json_encode(
-        [
+    if ($webhookCode === 'availability') {
+        $payload = [
+            'warehouses' => [],
+            'availability' => [],
+            'message' => 'Модуль интеграции IMSHOP не установлен',
+        ];
+    } else {
+        $listKey = $webhookCode === 'payments'
+            ? 'payments'
+            : (str_starts_with($webhookCode, 'orders/') ? 'orders' : 'deliveries');
+        $payload = [
             $listKey => [],
             'message' => 'Модуль интеграции IMSHOP не установлен',
-        ],
-        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-    );
+        ];
+    }
+
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
     return;
 }

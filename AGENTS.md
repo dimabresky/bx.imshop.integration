@@ -46,7 +46,7 @@ bx.imshop.integration/
 - **S** — HTTP только принимает JSON и вызывает обработчик. Расчёт доставки, поиск локации и маппинг ответа — отдельные классы.
 - **O** — следующий endpoint добавляется новым обработчиком, без переписывания `FrontController`.
 - **L** — обработчики взаимозаменяемы через `WebhookHandlerInterface`.
-- **I** — интерфейс webhook содержит `code()`, `responseKey()` и `handle()`. `code()` — путь под `/local/imshop/`. `responseKey()` — ключ списка в JSON-контракте IMSHOP.
+- **I** — интерфейс webhook содержит `code()`, `responseKey()`, `responseListKeys()`, `failureMessage()` и `handle()`. `code()` — путь под `/local/imshop/`. `responseKey()` — основной ключ списка. `responseListKeys()` — ключи, которые очищаются в ошибке.
 - **D** — обработчик зависит от сервиса расчёта, а не от `$_POST` и не от компонента оформления заказа.
 
 ## DRY

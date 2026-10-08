@@ -2,26 +2,26 @@
 
 namespace Bx\Imshop\Integration\Webhook;
 
-use Bx\Imshop\Integration\Sale\OrderCreator;
+use Bx\Imshop\Integration\Sale\AvailabilityCalculator;
 
 /**
- * POST /local/imshop/orders/create
+ * POST /local/imshop/availability
  */
-final class OrderWebhook implements WebhookHandlerInterface
+final class CheckQuantityWebhook implements WebhookHandlerInterface
 {
     public function __construct(
-        private readonly OrderCreator $orders = new OrderCreator(),
+        private readonly AvailabilityCalculator $availability = new AvailabilityCalculator(),
     ) {
     }
 
     public function code(): string
     {
-        return 'orders/create';
+        return 'availability';
     }
 
     public function responseKey(): string
     {
-        return 'orders';
+        return 'availability';
     }
 
     /**
@@ -29,12 +29,12 @@ final class OrderWebhook implements WebhookHandlerInterface
      */
     public function responseListKeys(): array
     {
-        return [$this->responseKey()];
+        return ['warehouses', 'availability'];
     }
 
     public function failureMessage(): string
     {
-        return 'Не удалось оформить заказ';
+        return 'Не удалось проверить наличие';
     }
 
     /**
@@ -43,6 +43,6 @@ final class OrderWebhook implements WebhookHandlerInterface
      */
     public function handle(array $payload): array
     {
-        return $this->orders->place($payload);
+        return $this->availability->calculate($payload);
     }
 }
