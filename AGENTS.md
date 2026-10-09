@@ -59,7 +59,7 @@ bx.imshop.integration/
 - ORM D7 и API Sale/Catalog. Свои таблицы не заводить, пока спецификация webhook этого не требует.
 - Местоположение в свойство заказа с `IS_LOCATION` передаётся кодом справочника, не названием города.
 - Купон запроса — `DiscountCouponsManager` в `MODE_EXTERNAL` на время одного запроса, затем `clear(true)`.
-- `bonusesSpent` и `authorizedBonuses` не списываются: списание бонусов Аспро привязано к сессии чекаута. `paymentProcessed` заказ оплаченным не помечает.
+- Хук корзины отдаёт `bonuses.canSpend` (лимит Aspro) и не списывает баланс. `bonusesSpent` в доставках и `authorizedBonuses` при создании заказа не применяются: списание привязано к сессии чекаута. `paymentProcessed` заказ оплаченным не помечает.
 
 ## HTTP-запрос
 
