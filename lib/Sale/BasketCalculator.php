@@ -17,7 +17,8 @@ use Bx\Imshop\Integration\Http\RequestException;
 
 /**
  * Basket total after Bitrix catalog prices and sale basket rules.
- * The order stays in memory. IMSHOP promo groups, bonuses and gift cards are not applied.
+ * The order stays in memory. IMSHOP promo groups and gift cards are not applied.
+ * bonuses.canSpend is the Aspro spend limit. The balance is not written off.
  */
 final class BasketCalculator
 {
@@ -30,8 +31,8 @@ final class BasketCalculator
     }
 
     /**
-     * authorizedBonuses, promoGroup, giftCards and promocodes are accepted by the
-     * protocol and are not applied. Bonus write-off is tied to the checkout session.
+     * promoGroup, giftCards and promocodes are accepted by the protocol and are not applied.
+     * authorizedBonuses is the amount the shopper chose to spend. totalPrice stays without that spend.
      * Marketing actions are a later iteration.
      *
      * @param array<string, mixed> $payload
@@ -72,7 +73,7 @@ final class BasketCalculator
     /**
      * @param array<string, mixed> $payload
      * @param array<mixed> $items
-     * @return array{totalPrice: float, discount: float, items: list<array<string, mixed>>}
+     * @return array{totalPrice: float, discount: float, items: list<array<string, mixed>>, bonuses?: array{canSpend: float}}
      */
     private function totals(array $payload, array $items, int $userId): array
     {
@@ -111,7 +112,7 @@ final class BasketCalculator
         }
 
         $calculated = $orderItems === []
-            ? ['lines' => [], 'extras' => []]
+            ? ['lines' => [], 'extras' => [], 'canSpend' => null]
             : $this->pricedLines($payload, $orderItems);
         $responseItems = [];
         $totalPrice = 0.0;
@@ -137,17 +138,24 @@ final class BasketCalculator
             $responseItems[] = $extra;
         }
 
-        return [
+        $result = [
             'totalPrice' => PriceMaths::roundPrecision($totalPrice),
             'discount' => PriceMaths::roundPrecision($discount),
             'items' => $responseItems,
         ];
+        if (is_float($calculated['canSpend']) || is_int($calculated['canSpend'])) {
+            $result['bonuses'] = [
+                'canSpend' => PriceMaths::roundPrecision((float) $calculated['canSpend']),
+            ];
+        }
+
+        return $result;
     }
 
     /**
      * @param array<string, mixed> $payload
      * @param list<array<string, mixed>> $orderItems
-     * @return array{lines: array<string, array<string, mixed>>, extras: list<array<string, mixed>>}
+     * @return array{lines: array<string, array<string, mixed>>, extras: list<array<string, mixed>>, canSpend: float|null}
      */
     private function pricedLines(array $payload, array $orderItems): array
     {
@@ -164,11 +172,16 @@ final class BasketCalculator
         $this->applyPayment($order, $payload);
         $order->doFinalAction(true);
 
+        $quote = $this->bonusQuote($order, $payload);
         $lines = [];
         $extras = [];
         $basket = $order->getBasket();
         if ($basket === null) {
-            return ['lines' => $lines, 'extras' => $extras];
+            return [
+                'lines' => $lines,
+                'extras' => $extras,
+                'canSpend' => is_array($quote) ? (float) $quote['canSpend'] : null,
+            ];
         }
 
         /** @var BasketItem $basketItem */
@@ -180,7 +193,11 @@ final class BasketCalculator
             $lineKey = trim((string) $basketItem->getField('XML_ID'));
             if (str_starts_with($lineKey, 'imshop-')) {
                 if (!isset($lines[$lineKey])) {
-                    $lines[$lineKey] = $this->fromBasketItem($basketItem, $orderItems, $lineKey);
+                    $lines[$lineKey] = $this->withLineBonus(
+                        $this->fromBasketItem($basketItem, $orderItems, $lineKey),
+                        $quote,
+                        (int) $basketItem->getId()
+                    );
                 }
                 continue;
             }
@@ -189,10 +206,18 @@ final class BasketCalculator
                 continue;
             }
 
-            $extras[] = $this->fromBasketItem($basketItem, [], '');
+            $extras[] = $this->withLineBonus(
+                $this->fromBasketItem($basketItem, [], ''),
+                $quote,
+                (int) $basketItem->getId()
+            );
         }
 
-        return ['lines' => $lines, 'extras' => $extras];
+        return [
+            'lines' => $lines,
+            'extras' => $extras,
+            'canSpend' => is_array($quote) ? (float) $quote['canSpend'] : null,
+        ];
     }
 
     /**
@@ -361,6 +386,9 @@ final class BasketCalculator
         if ($error !== '') {
             $response['promocodeErrorMessage'] = $error;
         }
+        if (isset($totals['bonuses']) && is_array($totals['bonuses'])) {
+            $response['bonuses'] = $totals['bonuses'];
+        }
 
         return $response;
     }
@@ -520,6 +548,66 @@ final class BasketCalculator
         $id = (int) $value;
 
         return $id > 0 ? $id : 0;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{canSpend: float, lines: array<int, float>}|null
+     */
+    private function bonusQuote(Order $order, array $payload): ?array
+    {
+        $service = \Dnk\PhpInterface\BasketBonusService::class;
+        if (!class_exists($service)) {
+            return null;
+        }
+
+        $quote = $service::quote($order, $this->authorizedBonuses($payload));
+
+        return is_array($quote) ? $quote : null;
+    }
+
+    /**
+     * @param array<string, mixed> $line
+     * @param array{canSpend: float, lines: array<int, float>}|null $quote
+     * @return array<string, mixed>
+     */
+    private function withLineBonus(array $line, ?array $quote, int $basketItemId): array
+    {
+        if (
+            $quote === null
+            || $basketItemId <= 0
+            || ($line['selected'] ?? false) !== true
+            || ($line['canBePurchased'] ?? false) !== true
+            || !isset($quote['lines'][$basketItemId])
+        ) {
+            return $line;
+        }
+
+        $canSpend = (float) $quote['lines'][$basketItemId];
+        if ($canSpend <= 0) {
+            return $line;
+        }
+
+        $line['bonuses'] = [
+            'canSpend' => PriceMaths::roundPrecision($canSpend),
+        ];
+
+        return $line;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function authorizedBonuses(array $payload): float
+    {
+        $raw = $payload['authorizedBonuses'] ?? 0;
+        if (!is_numeric($raw)) {
+            return 0.0;
+        }
+
+        $amount = (float) $raw;
+
+        return $amount > 0 ? $amount : 0.0;
     }
 
     /**
