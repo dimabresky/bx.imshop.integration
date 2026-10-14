@@ -2,6 +2,7 @@
 
 namespace Bx\Imshop\Integration\Sale;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\HttpClient;
@@ -75,15 +76,52 @@ final class BePaidAcquiring
             return $this->failure('Не заданы URL возврата платёжной системы');
         }
 
-        $existingId = trim((string) $payment->getField('PS_INVOICE_ID'));
+        $connection = Application::getConnection();
+        $lockName = $this->lockName((int) $order->getId(), (int) $payment->getId());
+        if (!$connection->lock($lockName, 15)) {
+            return $this->failure('Не удалось создать платёж');
+        }
+
+        try {
+            return $this->issueCheckout($order, $payment, $service, $successUrl, $failureRegex);
+        } finally {
+            $connection->unlock($lockName);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function issueCheckout(
+        Order $order,
+        Payment $payment,
+        PaySystemService $service,
+        string $successUrl,
+        string $failureRegex,
+    ): array {
+        $reloaded = Order::load((int) $order->getId());
+        if (!$reloaded instanceof Order) {
+            return $this->failure('Заказ не найден');
+        }
+
+        $current = $reloaded->getPaymentCollection()->getItemById((int) $payment->getId());
+        if (!$current instanceof Payment) {
+            return $this->failure('Платёж не найден');
+        }
+
+        if ($current->isPaid() || (string) $current->getField('PS_STATUS') === 'Y') {
+            return $this->failure('Заказ уже оплачен');
+        }
+
+        $existingId = trim((string) $current->getField('PS_INVOICE_ID'));
         if ($existingId !== '') {
-            $reused = $this->reuseOpenCheckout($service, $payment, $existingId, $successUrl, $failureRegex);
+            $reused = $this->reuseOpenCheckout($service, $current, $existingId, $successUrl, $failureRegex);
             if ($reused !== null) {
                 return $reused;
             }
         }
 
-        $initResult = $service->initiatePay($payment, null, BaseServiceHandler::STRING);
+        $initResult = $service->initiatePay($current, null, BaseServiceHandler::STRING);
         if (!$initResult->isSuccess()) {
             return $this->failure($this->resultError($initResult->getErrorMessages(), 'Не удалось создать платёж'));
         }
@@ -93,20 +131,21 @@ final class BePaidAcquiring
             return $this->failure('Платёжная система не вернула ссылку на оплату');
         }
 
-        $paymentId = trim((string) $payment->getField('PS_INVOICE_ID'));
+        $paymentId = trim((string) $current->getField('PS_INVOICE_ID'));
         if ($paymentId === '') {
             return $this->failure('Платёжная система не вернула идентификатор платежа');
         }
 
-        $this->rememberPaymentUrl($payment, $paymentUrl);
+        $this->rememberPaymentUrl($current, $paymentUrl);
 
-        return [
-            'success' => true,
-            'paymentId' => $paymentId,
-            'paymentUrl' => $paymentUrl,
-            'successRegex' => preg_quote($successUrl, '/'),
-            'failureRegex' => $failureRegex,
-        ];
+        return $this->created($paymentId, $paymentUrl, $successUrl, $failureRegex);
+    }
+
+    private function lockName(int $orderId, int $paymentId): string
+    {
+        $hash = substr(hash('sha256', Config::getSiteId() . ':' . $orderId . ':' . $paymentId), 0, 40);
+
+        return 'bx_imshop_payment_' . $hash;
     }
 
     /**
