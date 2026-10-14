@@ -119,6 +119,11 @@ final class BePaidAcquiring
             if ($reused !== null) {
                 return $reused;
             }
+
+            $current = $this->replaceUnpaidPayment($reloaded, $current, $service);
+            if (!$current instanceof Payment) {
+                return $this->failure('Не удалось создать платёж');
+            }
         }
 
         $initResult = $service->initiatePay($current, null, BaseServiceHandler::STRING);
@@ -149,6 +154,52 @@ final class BePaidAcquiring
     }
 
     /**
+     * The stock bePaid handler sends tracking_id as the Bitrix payment id.
+     * A declined checkout can be retried only on a new payment, without changing that handler.
+     */
+    private function replaceUnpaidPayment(Order $order, Payment $payment, PaySystemService $service): ?Payment
+    {
+        if ($payment->isPaid() || (string) $payment->getField('PS_STATUS') === 'Y') {
+            return null;
+        }
+
+        $sum = (float) $payment->getSum();
+        $currency = (string) $payment->getField('CURRENCY');
+        $deleted = $payment->delete();
+        if (!$deleted->isSuccess()) {
+            return null;
+        }
+
+        $fresh = $order->getPaymentCollection()->createItem($service);
+        $fields = $fresh->setFields([
+            'SUM' => $sum > 0 ? $sum : 0,
+            'CURRENCY' => $currency,
+        ]);
+        if (!$fields->isSuccess()) {
+            return null;
+        }
+
+        $saved = $order->save();
+        if (!$saved->isSuccess()) {
+            return null;
+        }
+
+        $freshId = (int) $fresh->getId();
+        if ($freshId <= 0) {
+            return null;
+        }
+
+        $reloaded = Order::load((int) $order->getId());
+        if (!$reloaded instanceof Order) {
+            return $fresh;
+        }
+
+        $created = $reloaded->getPaymentCollection()->getItemById($freshId);
+
+        return $created instanceof Payment ? $created : $fresh;
+    }
+
+    /**
      * A second create must keep the checkout IMSHOP is already polling.
      * A new token is issued only after the previous checkout has failed.
      *
@@ -173,6 +224,10 @@ final class BePaidAcquiring
         }
 
         if ($fetched['state'] === 'error') {
+            return $this->failure('Не удалось создать платёж');
+        }
+
+        if ($fetched['state'] === 'missing') {
             return null;
         }
 
@@ -329,7 +384,7 @@ final class BePaidAcquiring
             return $this->pending($paymentId);
         }
 
-        if ($fetched['state'] === 'error') {
+        if ($fetched['state'] === 'error' || $fetched['state'] === 'missing') {
             return $this->captureFailure($paymentId, 'Не удалось проверить оплату');
         }
 
@@ -527,7 +582,7 @@ final class BePaidAcquiring
     }
 
     /**
-     * @return array{state: 'checkout', checkout: array<string, mixed>}|array{state: 'pending'}|array{state: 'error'}
+     * @return array{state: 'checkout', checkout: array<string, mixed>}|array{state: 'pending'}|array{state: 'error'}|array{state: 'missing'}
      */
     private function fetchCheckout(string $shopId, string $secret, string $paymentId): array
     {
@@ -548,6 +603,10 @@ final class BePaidAcquiring
         $statusCode = (int) $client->getStatus();
         if ($statusCode === 408 || $statusCode === 429 || $statusCode >= 500 || $statusCode === 0) {
             return ['state' => 'pending'];
+        }
+
+        if ($statusCode === 404) {
+            return ['state' => 'missing'];
         }
 
         if ($statusCode >= 400 && $statusCode < 500) {
