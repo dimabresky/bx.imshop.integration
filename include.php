@@ -13,6 +13,7 @@ use Bx\Imshop\Integration\Http\RequestException;
 use Bx\Imshop\Integration\Http\RequestLogger;
 use Bx\Imshop\Integration\Sale\AvailabilityCalculator;
 use Bx\Imshop\Integration\Sale\BasketCalculator;
+use Bx\Imshop\Integration\Sale\BePaidAcquiring;
 use Bx\Imshop\Integration\Sale\CalculationOrderFactory;
 use Bx\Imshop\Integration\Sale\CatalogItemResolver;
 use Bx\Imshop\Integration\Sale\DeliveryCalculator;
@@ -26,6 +27,8 @@ use Bx\Imshop\Integration\Webhook\BasketWebhook;
 use Bx\Imshop\Integration\Webhook\CheckQuantityWebhook;
 use Bx\Imshop\Integration\Webhook\DeliveryWebhook;
 use Bx\Imshop\Integration\Webhook\OrderWebhook;
+use Bx\Imshop\Integration\Webhook\PaymentCheckWebhook;
+use Bx\Imshop\Integration\Webhook\PaymentCreateWebhook;
 use Bx\Imshop\Integration\Webhook\PaymentWebhook;
 use Bx\Imshop\Integration\Webhook\Registry;
 use Bx\Imshop\Integration\Webhook\WebhookHandlerInterface;
@@ -48,10 +51,13 @@ Loader::registerAutoLoadClasses(
         BasketWebhook::class => 'lib/Webhook/BasketWebhook.php',
         CheckQuantityWebhook::class => 'lib/Webhook/CheckQuantityWebhook.php',
         DeliveryWebhook::class => 'lib/Webhook/DeliveryWebhook.php',
+        PaymentCheckWebhook::class => 'lib/Webhook/PaymentCheckWebhook.php',
+        PaymentCreateWebhook::class => 'lib/Webhook/PaymentCreateWebhook.php',
         PaymentWebhook::class => 'lib/Webhook/PaymentWebhook.php',
         OrderWebhook::class => 'lib/Webhook/OrderWebhook.php',
         AvailabilityCalculator::class => 'lib/Sale/AvailabilityCalculator.php',
         BasketCalculator::class => 'lib/Sale/BasketCalculator.php',
+        BePaidAcquiring::class => 'lib/Sale/BePaidAcquiring.php',
         CatalogItemResolver::class => 'lib/Sale/CatalogItemResolver.php',
         LocationResolver::class => 'lib/Sale/LocationResolver.php',
         CalculationOrderFactory::class => 'lib/Sale/CalculationOrderFactory.php',
