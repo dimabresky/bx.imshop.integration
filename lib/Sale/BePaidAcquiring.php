@@ -60,7 +60,7 @@ final class BePaidAcquiring
             return $this->failure('Платёж не найден');
         }
 
-        if ($payment->isPaid()) {
+        if ($payment->isPaid() || (string) $payment->getField('PS_STATUS') === 'Y') {
             return $this->failure('Заказ уже оплачен');
         }
 
@@ -145,38 +145,35 @@ final class BePaidAcquiring
         $status = strtolower($this->text($checkout['status'] ?? null));
         if ($status === self::STATUS_SUCCESSFUL) {
             $gatewayPayment = $checkout['gateway_response']['payment'] ?? null;
-            if (is_array($gatewayPayment)) {
-                $synced = $this->applySuccessfulCheckout(
-                    $payment->getCollection()->getOrder(),
-                    $payment,
-                    $service,
-                    $paymentId,
-                    $gatewayPayment
-                );
-                if (($synced['success'] ?? false) !== true) {
-                    $error = $this->text($synced['error'] ?? null);
-
-                    return $this->failure($error !== '' ? $error : 'Не удалось создать платёж');
-                }
+            if (!is_array($gatewayPayment)) {
+                return $this->reusedCheckout($payment, $paymentId, $successUrl, $failureRegex);
             }
-        } elseif ($this->isFinalFailure($checkout, $status)) {
+
+            $synced = $this->applySuccessfulCheckout(
+                $payment->getCollection()->getOrder(),
+                $payment,
+                $service,
+                $paymentId,
+                $gatewayPayment
+            );
+            if (($synced['success'] ?? false) !== true) {
+                $error = $this->text($synced['error'] ?? null);
+
+                return $this->failure($error !== '' ? $error : 'Не удалось создать платёж');
+            }
+
+            return $this->failure('Заказ уже оплачен');
+        }
+
+        if ($this->isFinalFailure($checkout, $status)) {
             return null;
         }
 
         $paymentUrl = $this->text($checkout['redirect_url'] ?? null);
         if ($this->isBePaidUrl($paymentUrl)) {
-            if ($status !== self::STATUS_SUCCESSFUL) {
-                $this->rememberPaymentUrl($payment, $paymentUrl);
-            }
+            $this->rememberPaymentUrl($payment, $paymentUrl);
 
             return $this->created($paymentId, $paymentUrl, $successUrl, $failureRegex);
-        }
-
-        if (
-            $status === self::STATUS_SUCCESSFUL
-            && ($payment->isPaid() || (string) $payment->getField('PS_STATUS') === 'Y')
-        ) {
-            return $this->failure('Заказ уже оплачен');
         }
 
         return $this->reusedCheckout($payment, $paymentId, $successUrl, $failureRegex);
