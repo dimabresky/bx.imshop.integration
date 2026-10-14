@@ -76,16 +76,15 @@ final class BePaidAcquiring
             return $this->failure('Не заданы URL возврата платёжной системы');
         }
 
-        $connection = Application::getConnection();
-        $lockName = $this->lockName((int) $order->getId(), (int) $payment->getId());
-        if (!$connection->lock($lockName, 15)) {
+        $lockName = $this->acquireOrderLock((int) $order->getId());
+        if ($lockName === null) {
             return $this->failure('Не удалось создать платёж');
         }
 
         try {
             return $this->issueCheckout($order, $payment, $service, $successUrl, $failureRegex);
         } finally {
-            $connection->unlock($lockName);
+            $this->releaseOrderLock($lockName);
         }
     }
 
@@ -146,11 +145,26 @@ final class BePaidAcquiring
         return $this->created($paymentId, $paymentUrl, $successUrl, $failureRegex);
     }
 
-    private function lockName(int $orderId, int $paymentId): string
+    private function lockName(int $orderId): string
     {
-        $hash = substr(hash('sha256', Config::getSiteId() . ':' . $orderId . ':' . $paymentId), 0, 40);
+        $hash = substr(hash('sha256', Config::getSiteId() . ':' . $orderId), 0, 40);
 
         return 'bx_imshop_payment_' . $hash;
+    }
+
+    private function acquireOrderLock(int $orderId): ?string
+    {
+        $lockName = $this->lockName($orderId);
+        if (!Application::getConnection()->lock($lockName, 15)) {
+            return null;
+        }
+
+        return $lockName;
+    }
+
+    private function releaseOrderLock(string $lockName): void
+    {
+        Application::getConnection()->unlock($lockName);
     }
 
     /**
@@ -364,53 +378,87 @@ final class BePaidAcquiring
             return $this->captureFailure($paymentId, 'Заказ отменён');
         }
 
-        if ($payment->isPaid() || (string) $payment->getField('PS_STATUS') === 'Y') {
-            return $this->captured($paymentId);
-        }
-
-        $service = PaySystemManager::getObjectById((int) $payment->getPaymentSystemId());
-        if (!$service instanceof PaySystemService || !$this->isBePaidCheckout($service)) {
-            return $this->captureFailure($paymentId, 'Способ оплаты не поддерживает онлайн-оплату');
-        }
-
-        $shopId = $this->businessValue($service, $payment, 'BEPAID_ID');
-        $secret = $this->businessValue($service, $payment, 'BEPAID_SECRET_KEY');
-        if ($shopId === '' || $secret === '') {
+        $lockName = $this->acquireOrderLock((int) $order->getId());
+        if ($lockName === null) {
             return $this->captureFailure($paymentId, 'Не удалось проверить оплату');
         }
 
-        $fetched = $this->fetchCheckout($shopId, $secret, $paymentId);
-        if ($fetched['state'] === 'pending') {
-            return $this->pending($paymentId);
-        }
+        try {
+            $current = $this->reloadPayment($order, $payment);
+            if (!$current instanceof Payment) {
+                return $this->captureFailure($paymentId, 'Платёж не найден');
+            }
 
-        if ($fetched['state'] === 'error' || $fetched['state'] === 'missing') {
-            return $this->captureFailure($paymentId, 'Не удалось проверить оплату');
-        }
+            if ($current->isPaid() || (string) $current->getField('PS_STATUS') === 'Y') {
+                return $this->captured($paymentId);
+            }
 
-        $checkout = $fetched['checkout'];
-        if (!is_array($checkout)) {
-            return $this->pending($paymentId);
-        }
+            $service = PaySystemManager::getObjectById((int) $current->getPaymentSystemId());
+            if (!$service instanceof PaySystemService || !$this->isBePaidCheckout($service)) {
+                return $this->captureFailure($paymentId, 'Способ оплаты не поддерживает онлайн-оплату');
+            }
 
-        $status = strtolower($this->text($checkout['status'] ?? null));
-        if ($status === self::STATUS_SUCCESSFUL) {
-            $gatewayPayment = $checkout['gateway_response']['payment'] ?? null;
-            if (!is_array($gatewayPayment)) {
+            $shopId = $this->businessValue($service, $current, 'BEPAID_ID');
+            $secret = $this->businessValue($service, $current, 'BEPAID_SECRET_KEY');
+            if ($shopId === '' || $secret === '') {
+                return $this->captureFailure($paymentId, 'Не удалось проверить оплату');
+            }
+
+            $fetched = $this->fetchCheckout($shopId, $secret, $paymentId);
+            if ($fetched['state'] === 'pending') {
                 return $this->pending($paymentId);
             }
 
-            return $this->applySuccessfulCheckout($order, $payment, $service, $paymentId, $gatewayPayment);
+            if ($fetched['state'] === 'error' || $fetched['state'] === 'missing') {
+                return $this->captureFailure($paymentId, 'Не удалось проверить оплату');
+            }
+
+            $checkout = $fetched['checkout'];
+            if (!is_array($checkout)) {
+                return $this->pending($paymentId);
+            }
+
+            $status = strtolower($this->text($checkout['status'] ?? null));
+            if ($status === self::STATUS_SUCCESSFUL) {
+                $gatewayPayment = $checkout['gateway_response']['payment'] ?? null;
+                if (!is_array($gatewayPayment)) {
+                    return $this->pending($paymentId);
+                }
+
+                $freshOrder = $current->getCollection()->getOrder();
+
+                return $this->applySuccessfulCheckout(
+                    $freshOrder,
+                    $current,
+                    $service,
+                    $paymentId,
+                    $gatewayPayment
+                );
+            }
+
+            if ($this->isFinalFailure($checkout, $status)) {
+                return $this->captureFailure(
+                    $paymentId,
+                    $this->checkoutError($checkout, 'Оплата не прошла')
+                );
+            }
+
+            return $this->pending($paymentId);
+        } finally {
+            $this->releaseOrderLock($lockName);
+        }
+    }
+
+    private function reloadPayment(Order $order, Payment $payment): ?Payment
+    {
+        $reloaded = Order::load((int) $order->getId());
+        if (!$reloaded instanceof Order) {
+            return null;
         }
 
-        if ($this->isFinalFailure($checkout, $status)) {
-            return $this->captureFailure(
-                $paymentId,
-                $this->checkoutError($checkout, 'Оплата не прошла')
-            );
-        }
+        $current = $reloaded->getPaymentCollection()->getItemById((int) $payment->getId());
 
-        return $this->pending($paymentId);
+        return $current instanceof Payment ? $current : null;
     }
 
     private function assertSale(): void
