@@ -8,7 +8,7 @@
 - Модуль `bx.imshop.integration` принимает webhook-и [IMSHOP Retail Protocol](https://docs.imshop.io/) от платформы IMSHOP и отвечает JSON.
 - Запросы stateless: каждый POST содержит все данные для ответа. Сессия, cookies и корзина `fuser` не источник данных.
 - Расчёт доставки повторяет последовательность `bitrix:sale.order.ajax` (`initShipment`, `getRestrictedObjectsList`, `calculateDelivery`, `doFinalAction`, склады из `obtainDelivery`) на временном заказе.
-- Расчёт доставок и оплат не сохраняет заказ. `Order::save()` разрешён только в `OrderCreator`.
+- Расчёт доставок и оплат не сохраняет заказ. `Order::save()` разрешён в `OrderCreator` и в `BePaidAcquiring` при отметке оплаты.
 - Точка входа на сайте — каталог `/local/imshop/<path>/`. Путь может быть вложенным (`orders/create`). Его копирует `installFiles()` из `install/imshop/` и удаляет `unInstallFiles()`. Роутер модуля — `public/endpoint.php`: код вебхука — путь относительно `/local/imshop/`.
 - Секреты (ключ API) только в опциях модуля на стенде, не в репозитории.
 - Ответ webhook не содержит полей заказа, которых нет в контракте IMSHOP для этого endpoint.

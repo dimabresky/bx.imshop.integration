@@ -18,7 +18,8 @@ use Bx\Imshop\Integration\Http\RequestLogger;
 /**
  * Places IMSHOP orders through Sale. Request line prices are ignored.
  * authorizedBonuses and paymentProcessed are accepted and not applied.
- * Order::save() is allowed only here.
+ * Order::save() for a new order is allowed here.
+ * BePaidAcquiring may save an existing order when it marks a payment paid.
  */
 final class OrderCreator
 {

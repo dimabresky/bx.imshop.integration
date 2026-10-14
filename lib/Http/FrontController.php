@@ -112,6 +112,13 @@ final class FrontController
         }
 
         if ($keys === []) {
+            if ($handler !== null) {
+                return [
+                    'success' => false,
+                    'error' => $message,
+                ];
+            }
+
             return ['message' => $message];
         }
 

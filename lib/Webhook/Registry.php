@@ -14,12 +14,16 @@ final class Registry
     {
         $delivery = new DeliveryWebhook();
         $payment = new PaymentWebhook();
+        $paymentCreate = new PaymentCreateWebhook();
+        $paymentCheck = new PaymentCheckWebhook();
         $order = new OrderWebhook();
         $availability = new CheckQuantityWebhook();
         $basket = new BasketWebhook();
         $this->handlers = [
             $delivery->code() => $delivery,
             $payment->code() => $payment,
+            $paymentCreate->code() => $paymentCreate,
+            $paymentCheck->code() => $paymentCheck,
             $order->code() => $order,
             $availability->code() => $availability,
             $basket->code() => $basket,
