@@ -75,6 +75,14 @@ final class BePaidAcquiring
             return $this->failure('Не заданы URL возврата платёжной системы');
         }
 
+        $existingId = trim((string) $payment->getField('PS_INVOICE_ID'));
+        if ($existingId !== '') {
+            $reused = $this->reuseOpenCheckout($service, $payment, $existingId, $successUrl, $failureRegex);
+            if ($reused !== null) {
+                return $reused;
+            }
+        }
+
         $initResult = $service->initiatePay($payment, null, BaseServiceHandler::STRING);
         if (!$initResult->isSuccess()) {
             return $this->failure($this->resultError($initResult->getErrorMessages(), 'Не удалось создать платёж'));
@@ -88,6 +96,62 @@ final class BePaidAcquiring
         $paymentId = trim((string) $payment->getField('PS_INVOICE_ID'));
         if ($paymentId === '') {
             return $this->failure('Платёжная система не вернула идентификатор платежа');
+        }
+
+        return [
+            'success' => true,
+            'paymentId' => $paymentId,
+            'paymentUrl' => $paymentUrl,
+            'successRegex' => preg_quote($successUrl, '/'),
+            'failureRegex' => $failureRegex,
+        ];
+    }
+
+    /**
+     * A second create must keep the checkout IMSHOP is already polling.
+     * A new token is issued only after the previous checkout has failed.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function reuseOpenCheckout(
+        PaySystemService $service,
+        Payment $payment,
+        string $paymentId,
+        string $successUrl,
+        string $failureRegex,
+    ): ?array {
+        $shopId = $this->businessValue($service, $payment, 'BEPAID_ID');
+        $secret = $this->businessValue($service, $payment, 'BEPAID_SECRET_KEY');
+        if ($shopId === '' || $secret === '') {
+            return $this->failure('Не удалось создать платёж');
+        }
+
+        $fetched = $this->fetchCheckout($shopId, $secret, $paymentId);
+        if ($fetched['state'] === 'pending') {
+            return $this->failure('Не удалось создать платёж');
+        }
+
+        if ($fetched['state'] === 'error') {
+            return null;
+        }
+
+        $checkout = $fetched['checkout'];
+        if (!is_array($checkout)) {
+            return $this->failure('Не удалось создать платёж');
+        }
+
+        $status = strtolower($this->text($checkout['status'] ?? null));
+        if ($status === self::STATUS_SUCCESSFUL) {
+            return $this->failure('Заказ уже оплачен');
+        }
+
+        if ($this->isFinalFailure($checkout, $status)) {
+            return null;
+        }
+
+        $paymentUrl = $this->text($checkout['redirect_url'] ?? null);
+        if (!$this->isBePaidUrl($paymentUrl)) {
+            return $this->failure('Не удалось создать платёж');
         }
 
         return [
