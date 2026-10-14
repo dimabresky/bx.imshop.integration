@@ -98,6 +98,8 @@ final class BePaidAcquiring
             return $this->failure('Платёжная система не вернула идентификатор платежа');
         }
 
+        $this->rememberPaymentUrl($payment, $paymentUrl);
+
         return [
             'success' => true,
             'paymentId' => $paymentId,
@@ -128,7 +130,7 @@ final class BePaidAcquiring
 
         $fetched = $this->fetchCheckout($shopId, $secret, $paymentId);
         if ($fetched['state'] === 'pending') {
-            return $this->failure('Не удалось создать платёж');
+            return $this->reusedCheckout($payment, $paymentId, $successUrl, $failureRegex);
         }
 
         if ($fetched['state'] === 'error') {
@@ -137,23 +139,75 @@ final class BePaidAcquiring
 
         $checkout = $fetched['checkout'];
         if (!is_array($checkout)) {
-            return $this->failure('Не удалось создать платёж');
+            return $this->reusedCheckout($payment, $paymentId, $successUrl, $failureRegex);
         }
 
         $status = strtolower($this->text($checkout['status'] ?? null));
         if ($status === self::STATUS_SUCCESSFUL) {
-            return $this->failure('Заказ уже оплачен');
-        }
+            $gatewayPayment = $checkout['gateway_response']['payment'] ?? null;
+            if (is_array($gatewayPayment)) {
+                $synced = $this->applySuccessfulCheckout(
+                    $payment->getCollection()->getOrder(),
+                    $payment,
+                    $service,
+                    $paymentId,
+                    $gatewayPayment
+                );
+                if (($synced['success'] ?? false) !== true) {
+                    $error = $this->text($synced['error'] ?? null);
 
-        if ($this->isFinalFailure($checkout, $status)) {
+                    return $this->failure($error !== '' ? $error : 'Не удалось создать платёж');
+                }
+            }
+        } elseif ($this->isFinalFailure($checkout, $status)) {
             return null;
         }
 
         $paymentUrl = $this->text($checkout['redirect_url'] ?? null);
+        if ($this->isBePaidUrl($paymentUrl)) {
+            if ($status !== self::STATUS_SUCCESSFUL) {
+                $this->rememberPaymentUrl($payment, $paymentUrl);
+            }
+
+            return $this->created($paymentId, $paymentUrl, $successUrl, $failureRegex);
+        }
+
+        if (
+            $status === self::STATUS_SUCCESSFUL
+            && ($payment->isPaid() || (string) $payment->getField('PS_STATUS') === 'Y')
+        ) {
+            return $this->failure('Заказ уже оплачен');
+        }
+
+        return $this->reusedCheckout($payment, $paymentId, $successUrl, $failureRegex);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function reusedCheckout(
+        Payment $payment,
+        string $paymentId,
+        string $successUrl,
+        string $failureRegex,
+    ): ?array {
+        $paymentUrl = $this->text($payment->getField('PS_STATUS_DESCRIPTION'));
         if (!$this->isBePaidUrl($paymentUrl)) {
             return $this->failure('Не удалось создать платёж');
         }
 
+        return $this->created($paymentId, $paymentUrl, $successUrl, $failureRegex);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function created(
+        string $paymentId,
+        string $paymentUrl,
+        string $successUrl,
+        string $failureRegex,
+    ): array {
         return [
             'success' => true,
             'paymentId' => $paymentId,
@@ -161,6 +215,25 @@ final class BePaidAcquiring
             'successRegex' => preg_quote($successUrl, '/'),
             'failureRegex' => $failureRegex,
         ];
+    }
+
+    private function rememberPaymentUrl(Payment $payment, string $paymentUrl): void
+    {
+        if (!$this->isBePaidUrl($paymentUrl)) {
+            return;
+        }
+
+        if ((string) $payment->getField('PS_STATUS_DESCRIPTION') === $paymentUrl) {
+            return;
+        }
+
+        $updated = $payment->setField('PS_STATUS_DESCRIPTION', $paymentUrl);
+        if (!$updated->isSuccess()) {
+            return;
+        }
+
+        $order = $payment->getCollection()->getOrder();
+        $order->save();
     }
 
     /**
