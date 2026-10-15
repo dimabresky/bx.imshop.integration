@@ -28,10 +28,16 @@ final class CalculationOrderFactory
      * Delivery and payment quotes require a location and at least one buyable line.
      * Basket recalculation can omit both: the cart screen opens before an address,
      * and a cart of only deferred lines still needs a successful response.
+     * $buyerId overrides externalUserId. Quote endpoints leave it null.
      *
      * @param array<string, mixed> $payload
      */
-    public function create(array $payload, bool $requireLocation = true, bool $requireItems = true): Order
+    public function create(
+        array $payload,
+        bool $requireLocation = true,
+        bool $requireItems = true,
+        ?int $buyerId = null,
+    ): Order
     {
         if (!Loader::includeModule('sale') || !Loader::includeModule('catalog')) {
             throw new RequestException('Модули магазина недоступны', 503);
@@ -54,7 +60,7 @@ final class CalculationOrderFactory
         }
 
         $siteId = Config::getSiteId();
-        $userId = $this->userId($payload);
+        $userId = $buyerId ?? $this->userId($payload);
         $order = Order::create($siteId, $userId > 0 ? $userId : null);
         $personTypeResult = $order->setPersonTypeId($personTypeId);
         if (!$personTypeResult->isSuccess()) {

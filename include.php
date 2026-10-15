@@ -23,7 +23,9 @@ use Bx\Imshop\Integration\Sale\LocationResolver;
 use Bx\Imshop\Integration\Sale\OrderCreator;
 use Bx\Imshop\Integration\Sale\PaymentCalculator;
 use Bx\Imshop\Integration\Sale\StoreStockFilter;
+use Bx\Imshop\Integration\User\OrderBuyer;
 use Bx\Imshop\Integration\User\PhoneOtp;
+use Bx\Imshop\Integration\User\PhoneUserFinder;
 use Bx\Imshop\Integration\Webhook\BasketWebhook;
 use Bx\Imshop\Integration\Webhook\CheckQuantityWebhook;
 use Bx\Imshop\Integration\Webhook\DeliveryWebhook;
@@ -70,6 +72,8 @@ Loader::registerAutoLoadClasses(
         PaymentCalculator::class => 'lib/Sale/PaymentCalculator.php',
         StoreStockFilter::class => 'lib/Sale/StoreStockFilter.php',
         OrderCreator::class => 'lib/Sale/OrderCreator.php',
+        OrderBuyer::class => 'lib/User/OrderBuyer.php',
+        PhoneUserFinder::class => 'lib/User/PhoneUserFinder.php',
         PhoneOtp::class => 'lib/User/PhoneOtp.php',
         OtpConfirmWebhook::class => 'lib/Webhook/OtpConfirmWebhook.php',
         OtpRequestWebhook::class => 'lib/Webhook/OtpRequestWebhook.php',
