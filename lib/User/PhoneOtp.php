@@ -52,22 +52,46 @@ final class PhoneOtp
             );
         }
 
-        $resolved = $this->resolveUserId($normalized);
-        if (!($resolved['ok'] ?? false)) {
-            return $this->error((string) ($resolved['error'] ?? 'Не удалось отправить код'));
-        }
-
-        $userId = $resolved['userId'] ?? null;
-        if ($userId === null) {
-            return $this->register($normalized, $payload);
-        }
-
-        $active = $this->isActive($userId);
-        if ($active === null) {
+        if (!$this->phones->lock($normalized)) {
             return $this->error('Не удалось отправить код');
         }
 
-        return $this->sendCode($userId, !$active);
+        $reply = null;
+        $sendUserId = 0;
+        $sendRegistration = false;
+        try {
+            $resolved = $this->resolveUserId($normalized);
+            if (!($resolved['ok'] ?? false)) {
+                $reply = $this->error((string) ($resolved['error'] ?? 'Не удалось отправить код'));
+            } else {
+                $userId = $resolved['userId'] ?? null;
+                if ($userId === null) {
+                    $created = $this->register($normalized, $payload);
+                    if (!is_int($created)) {
+                        $reply = $created;
+                    } else {
+                        $sendUserId = $created;
+                        $sendRegistration = true;
+                    }
+                } else {
+                    $active = $this->isActive($userId);
+                    if ($active === null) {
+                        $reply = $this->error('Не удалось отправить код');
+                    } else {
+                        $sendUserId = (int) $userId;
+                        $sendRegistration = !$active;
+                    }
+                }
+            }
+        } finally {
+            $this->phones->unlock($normalized);
+        }
+
+        if ($reply !== null) {
+            return $reply;
+        }
+
+        return $this->sendCode($sendUserId, $sendRegistration);
     }
 
     /**
@@ -204,9 +228,9 @@ final class PhoneOtp
 
     /**
      * @param array<string, mixed> $payload
-     * @return array<string, mixed>
+     * @return array<string, mixed>|int Error or dataRequired payload, or the new user id.
      */
-    private function register(string $normalized, array $payload): array
+    private function register(string $normalized, array $payload): array|int
     {
         $fullName = $this->scalarString($payload['fullName'] ?? null);
         if ($fullName === '') {
@@ -271,7 +295,7 @@ final class PhoneOtp
 
         $this->notifyRegistered($userId);
 
-        return $this->sendCode($userId, true);
+        return $userId;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Bx\Imshop\Integration\User;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\UserPhoneAuthTable;
 use Bitrix\Main\UserTable;
 
@@ -29,6 +30,27 @@ final class PhoneUserFinder
     public function digits(string $phone): string
     {
         return preg_replace('/\D+/', '', $phone) ?: '';
+    }
+
+    /**
+     * Serializes order placement and OTP registration for one normalized phone.
+     */
+    public function lock(string $normalized): bool
+    {
+        if ($normalized === '') {
+            return false;
+        }
+
+        return Application::getConnection()->lock($this->lockName($normalized), 15);
+    }
+
+    public function unlock(string $normalized): void
+    {
+        if ($normalized === '') {
+            return;
+        }
+
+        Application::getConnection()->unlock($this->lockName($normalized));
     }
 
     /**
@@ -133,5 +155,10 @@ final class PhoneUserFinder
         }
 
         return $ids;
+    }
+
+    private function lockName(string $normalized): string
+    {
+        return 'bx_imshop_phone_' . substr(hash('sha256', $normalized), 0, 40);
     }
 }

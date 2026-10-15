@@ -2,7 +2,6 @@
 
 namespace Bx\Imshop\Integration\User;
 
-use Bitrix\Main\Application;
 use Bitrix\Main\UserTable;
 use Bx\Imshop\Integration\Config;
 use Bx\Imshop\Integration\Http\RequestException;
@@ -38,16 +37,14 @@ final class OrderBuyer
             throw new RequestException('Не указан телефон покупателя', 200);
         }
 
-        $connection = Application::getConnection();
-        $lockName = 'bx_imshop_phone_' . substr(hash('sha256', $normalized), 0, 40);
-        if (!$connection->lock($lockName, 15)) {
+        if (!$this->phones->lock($normalized)) {
             throw new RequestException('Не удалось определить покупателя', 500);
         }
 
         try {
             return $this->resolveLocked($source, $normalized, $digits);
         } finally {
-            $connection->unlock($lockName);
+            $this->phones->unlock($normalized);
         }
     }
 
@@ -56,17 +53,9 @@ final class OrderBuyer
      */
     private function resolveLocked(array $source, string $normalized, string $digits): int
     {
-        $found = $this->phones->find($normalized);
-        if ($found['kind'] === 'ambiguous') {
-            throw new RequestException('Найдено несколько пользователей с этим номером', 200);
-        }
-        if ($found['kind'] === 'auth') {
-            return $found['userId'];
-        }
-        if ($found['kind'] === 'profile') {
-            $this->phones->ensurePhoneAuthRow($found['userId'], $normalized);
-
-            return $found['userId'];
+        $existing = $this->attachFound($normalized);
+        if ($existing > 0) {
+            return $existing;
         }
 
         return $this->register($source, $normalized, $digits);
@@ -103,19 +92,42 @@ final class OrderBuyer
             $userId = (int) $user->Add($fields);
         }
         if ($userId <= 0) {
+            $existing = $this->attachFound($normalized);
+            if ($existing > 0) {
+                return $existing;
+            }
+
             throw new RequestException(
                 $this->userError($user->LAST_ERROR, 'Не удалось определить покупателя'),
                 500
             );
         }
 
-        if (!$this->phones->ensurePhoneAuthRow($userId, $normalized)) {
-            throw new RequestException('Не удалось определить покупателя', 500);
-        }
-
+        $this->phones->ensurePhoneAuthRow($userId, $normalized);
         $this->notifyRegistered($userId);
 
         return $userId;
+    }
+
+    /**
+     * Binds a buyer already stored for this phone. Zero means the phone is still free.
+     */
+    private function attachFound(string $normalized): int
+    {
+        $found = $this->phones->find($normalized);
+        if ($found['kind'] === 'ambiguous') {
+            throw new RequestException('Найдено несколько пользователей с этим номером', 200);
+        }
+        if ($found['kind'] === 'auth') {
+            return $found['userId'];
+        }
+        if ($found['kind'] === 'profile') {
+            $this->phones->ensurePhoneAuthRow($found['userId'], $normalized);
+
+            return $found['userId'];
+        }
+
+        return 0;
     }
 
     private function acceptableEmail(string $email): string
