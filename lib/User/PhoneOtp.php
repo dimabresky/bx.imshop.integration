@@ -284,8 +284,7 @@ final class PhoneOtp
         $fullName = $this->scalarString($payload['fullName'] ?? null);
         if ($fullName === '') {
             return [
-                'dataRequired' => ['fullName', 'email'],
-                'dataOptional' => ['email'],
+                'dataRequired' => ['fullName'],
             ];
         }
 
@@ -714,7 +713,9 @@ final class PhoneOtp
     }
 
     /**
-     * @return array{0: string, 1: string, 2: string}
+     * Фамилия, имя, отчество. Одно слово остаётся именем.
+     *
+     * @return array{0: string, 1: string, 2: string} NAME, LAST_NAME, SECOND_NAME
      */
     private function splitName(string $fullName): array
     {
@@ -723,14 +724,11 @@ final class PhoneOtp
         if (count($parts) <= 1) {
             return [$parts[0] ?? '', '', ''];
         }
-        if (count($parts) === 2) {
-            return [$parts[0], $parts[1], ''];
-        }
 
+        $lastName = array_shift($parts);
         $name = array_shift($parts);
-        $lastName = array_pop($parts);
 
-        return [$name, (string) $lastName, implode(' ', $parts)];
+        return [(string) $name, (string) $lastName, implode(' ', $parts)];
     }
 
     private function uniqueLogin(string $digits): string
