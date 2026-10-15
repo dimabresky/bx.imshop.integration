@@ -27,6 +27,11 @@ final class PhoneOtp
 
     private const REPLY_TEXT = 'Выслать код повторно';
 
+    public function __construct(
+        private readonly PhoneUserFinder $phones = new PhoneUserFinder(),
+    ) {
+    }
+
     /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
@@ -158,18 +163,7 @@ final class PhoneOtp
 
     private function normalize(string $raw): string
     {
-        $digits = preg_replace('/\D+/', '', $raw) ?: '';
-        if ($digits === '') {
-            return '';
-        }
-
-        try {
-            $normalized = UserPhoneAuthTable::normalizePhoneNumber('+' . $digits);
-        } catch (\Throwable) {
-            return '';
-        }
-
-        return is_string($normalized) ? $normalized : '';
+        return $this->phones->normalize($raw);
     }
 
     /**
@@ -177,102 +171,35 @@ final class PhoneOtp
      */
     private function resolveUserId(string $normalized, bool $attach = true): array
     {
-        $row = UserPhoneAuthTable::getList([
-            'select' => ['USER_ID'],
-            'filter' => ['=PHONE_NUMBER' => $normalized],
-            'limit' => 1,
-        ])->fetch();
-        if (is_array($row) && (int) ($row['USER_ID'] ?? 0) > 0) {
-            return ['ok' => true, 'userId' => (int) $row['USER_ID']];
-        }
-
-        $digits = $this->digits($normalized);
-        $userIds = $this->findUserIdsByProfileDigits($digits);
-        if (count($userIds) > 1) {
+        $found = $this->phones->find($normalized);
+        if ($found['kind'] === 'ambiguous') {
             return ['ok' => false, 'error' => 'Найдено несколько пользователей с этим номером'];
         }
-        if (count($userIds) === 1) {
+        if ($found['kind'] === 'auth') {
+            return ['ok' => true, 'userId' => $found['userId']];
+        }
+        if ($found['kind'] === 'profile') {
             if (!$attach) {
                 return ['ok' => true, 'userId' => null];
             }
-            if (!$this->ensurePhoneAuthRow($userIds[0], $normalized)) {
+            if (!$this->ensurePhoneAuthRow($found['userId'], $normalized)) {
                 return ['ok' => false, 'error' => 'Не удалось отправить код'];
             }
 
-            return ['ok' => true, 'userId' => $userIds[0]];
+            return ['ok' => true, 'userId' => $found['userId']];
         }
 
         return ['ok' => true, 'userId' => null];
     }
 
-    /**
-     * @return list<int>
-     */
-    private function findUserIdsByProfileDigits(string $digits): array
-    {
-        if ($digits === '') {
-            return [];
-        }
-
-        $candidates = [$digits, '+' . $digits];
-        $normalized = $this->normalize($digits);
-        if ($normalized !== '') {
-            $candidates[] = $normalized;
-        }
-        $candidates = array_values(array_unique($candidates));
-
-        $filter = ['LOGIC' => 'OR'];
-        foreach ($candidates as $candidate) {
-            $filter[] = ['=PERSONAL_PHONE' => $candidate];
-            $filter[] = ['=PERSONAL_MOBILE' => $candidate];
-            $filter[] = ['=WORK_PHONE' => $candidate];
-        }
-
-        $matched = [];
-        $rows = UserTable::getList([
-            'filter' => $filter,
-            'select' => ['ID', 'PERSONAL_PHONE', 'PERSONAL_MOBILE', 'WORK_PHONE'],
-        ]);
-        while ($row = $rows->fetch()) {
-            $userId = (int) ($row['ID'] ?? 0);
-            if ($userId <= 0) {
-                continue;
-            }
-            foreach (['PERSONAL_PHONE', 'PERSONAL_MOBILE', 'WORK_PHONE'] as $field) {
-                if ($this->digits((string) ($row[$field] ?? '')) === $digits) {
-                    $matched[$userId] = true;
-                }
-            }
-        }
-
-        return array_keys($matched);
-    }
-
     private function ensurePhoneAuthRow(int $userId, string $normalized): bool
     {
-        if ($userId <= 0 || $normalized === '') {
-            return false;
-        }
+        return $this->phones->ensurePhoneAuthRow($userId, $normalized);
+    }
 
-        $existing = UserPhoneAuthTable::getRowById($userId);
-        if (is_array($existing)) {
-            $stored = (string) ($existing['PHONE_NUMBER'] ?? '');
-            if ($stored === $normalized) {
-                return true;
-            }
-            if ($stored === '' || $this->digits($stored) !== $this->digits($normalized)) {
-                return false;
-            }
-
-            return UserPhoneAuthTable::update($userId, ['PHONE_NUMBER' => $normalized])->isSuccess();
-        }
-
-        $result = UserPhoneAuthTable::add([
-            'USER_ID' => $userId,
-            'PHONE_NUMBER' => $normalized,
-        ]);
-
-        return $result->isSuccess();
+    private function digits(string $phone): string
+    {
+        return $this->phones->digits($phone);
     }
 
     /**
@@ -776,11 +703,6 @@ final class PhoneOtp
         }
 
         return '+' . substr($digits, 0, 4) . str_repeat('*', $length - 6) . substr($digits, -2);
-    }
-
-    private function digits(string $phone): string
-    {
-        return preg_replace('/\D+/', '', $phone) ?: '';
     }
 
     private function codeLength(): int

@@ -14,6 +14,7 @@ use Bitrix\Sale\Shipment;
 use Bx\Imshop\Integration\Config;
 use Bx\Imshop\Integration\Http\RequestException;
 use Bx\Imshop\Integration\Http\RequestLogger;
+use Bx\Imshop\Integration\User\OrderBuyer;
 
 /**
  * Places IMSHOP orders through Sale. Request line prices are ignored.
@@ -27,6 +28,7 @@ final class OrderCreator
 
     public function __construct(
         private readonly CalculationOrderFactory $orders = new CalculationOrderFactory(),
+        private readonly OrderBuyer $buyers = new OrderBuyer(),
     ) {
     }
 
@@ -113,7 +115,7 @@ final class OrderCreator
      */
     private function create(array $source, string $uuid): array
     {
-        $userId = $this->orders->userId($source);
+        $userId = $this->buyers->resolve($source);
         DiscountCouponsManager::reInit(
             DiscountCouponsManager::MODE_EXTERNAL,
             ['userId' => $userId],
@@ -126,8 +128,7 @@ final class OrderCreator
                 DiscountCouponsManager::add(trim($coupon));
             }
 
-            $order = $this->orders->create($this->factoryPayload($source));
-            $this->assignUser($order, $userId);
+            $order = $this->orders->create($this->factoryPayload($source), true, true, $userId);
             $this->fillBuyer($order, $source);
             $this->fillComment($order, $source);
             $order->setField('XML_ID', $uuid);
@@ -182,23 +183,6 @@ final class OrderCreator
         }
 
         return $payload;
-    }
-
-    private function assignUser(Order $order, int $userId): void
-    {
-        if ($userId > 0) {
-            return;
-        }
-
-        $anonymous = (int) \CSaleUser::GetAnonymousUserID();
-        if ($anonymous <= 0) {
-            throw new RequestException('Не удалось определить покупателя', 500);
-        }
-
-        $result = $order->setField('USER_ID', $anonymous);
-        if (!$result->isSuccess()) {
-            throw new RequestException('Не удалось определить покупателя', 500);
-        }
     }
 
     /**
