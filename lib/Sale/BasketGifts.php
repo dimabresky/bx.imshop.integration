@@ -122,26 +122,17 @@ final class BasketGifts
         }
 
         $resolved = $this->items->resolve($payload);
-        if (count($resolved) === count($basketItems)) {
-            foreach ($resolved as $index => $line) {
-                $productId = (int) $line['productId'];
-                $source = $this->sourceItem($payload, $index);
-                if (isset($granted[$productId]) && is_array($source) && $this->isEcho($source)) {
-                    $this->zero($basketItems[$index]);
-                    unset($granted[$productId]);
-                }
-            }
-
+        if (count($resolved) !== count($basketItems)) {
             return;
         }
 
-        foreach ($basketItems as $basketItem) {
-            $productId = (int) $basketItem->getProductId();
-            if (!isset($granted[$productId]) || !$this->payloadHasEcho($payload, $productId)) {
-                continue;
+        foreach ($resolved as $index => $line) {
+            $productId = (int) $line['productId'];
+            $source = $this->sourceItem($payload, $index);
+            if (isset($granted[$productId]) && is_array($source) && $this->isEcho($source)) {
+                $this->zero($basketItems[$index]);
+                unset($granted[$productId]);
             }
-            $this->zero($basketItem);
-            unset($granted[$productId]);
         }
     }
 
@@ -386,28 +377,6 @@ final class BasketGifts
         }
 
         return null;
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     */
-    private function payloadHasEcho(array $payload, int $productId): bool
-    {
-        $items = $payload['items'] ?? null;
-        if (!is_array($items)) {
-            return false;
-        }
-
-        foreach ($items as $item) {
-            if (!is_array($item) || !$this->isEcho($item)) {
-                continue;
-            }
-            if ($this->items->catalogProductId($item) === $productId) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
