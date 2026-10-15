@@ -104,6 +104,14 @@ final class FrontController
      */
     private function errorPayload(string $webhookCode, string $message): array
     {
+        if ($webhookCode === 'otp' || $webhookCode === 'otp/confirm') {
+            return [
+                'error' => [
+                    'message' => $message,
+                ],
+            ];
+        }
+
         $handler = $this->registry->get($webhookCode);
         $keys = $handler?->responseListKeys() ?? [];
         if ($keys === []) {

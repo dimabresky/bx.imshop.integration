@@ -19,6 +19,8 @@ final class Registry
         $order = new OrderWebhook();
         $availability = new CheckQuantityWebhook();
         $basket = new BasketWebhook();
+        $otp = new OtpRequestWebhook();
+        $otpConfirm = new OtpConfirmWebhook();
         $this->handlers = [
             $delivery->code() => $delivery,
             $payment->code() => $payment,
@@ -27,6 +29,8 @@ final class Registry
             $order->code() => $order,
             $availability->code() => $availability,
             $basket->code() => $basket,
+            $otp->code() => $otp,
+            $otpConfirm->code() => $otpConfirm,
         ];
     }
 
