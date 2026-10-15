@@ -64,9 +64,7 @@ final class OrderBuyer
             return $found['userId'];
         }
         if ($found['kind'] === 'profile') {
-            if (!$this->phones->ensurePhoneAuthRow($found['userId'], $normalized)) {
-                throw new RequestException('Не удалось определить покупателя', 500);
-            }
+            $this->phones->ensurePhoneAuthRow($found['userId'], $normalized);
 
             return $found['userId'];
         }
