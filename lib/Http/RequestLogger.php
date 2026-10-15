@@ -62,7 +62,7 @@ final class RequestLogger
     private static function redact(array $payload): array
     {
         if (!Config::isSecretLoggingEnabled()) {
-            unset($payload['key']);
+            unset($payload['key'], $payload['otp']);
         }
 
         return $payload;
