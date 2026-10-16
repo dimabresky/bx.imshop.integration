@@ -18,6 +18,7 @@ use Bx\Imshop\Integration\User\OrderBuyer;
 
 /**
  * Places IMSHOP orders through Sale. Request line prices are ignored.
+ * A basket-rule gift that is still granted is saved at zero.
  * authorizedBonuses and paymentProcessed are accepted and not applied.
  * Order::save() for a new order is allowed here.
  * BePaidAcquiring may save an existing order when it marks a payment paid.
@@ -29,6 +30,7 @@ final class OrderCreator
     public function __construct(
         private readonly CalculationOrderFactory $orders = new CalculationOrderFactory(),
         private readonly OrderBuyer $buyers = new OrderBuyer(),
+        private readonly BasketGifts $gifts = new BasketGifts(),
     ) {
     }
 
@@ -133,8 +135,10 @@ final class OrderCreator
             $this->fillComment($order, $source);
             $order->setField('XML_ID', $uuid);
             $order->doFinalAction(true);
+            $this->gifts->applyToOrder($order, $source);
             $this->applyDelivery($order, $source);
             $order->doFinalAction(true);
+            $this->gifts->applyToOrder($order, $source);
             $this->applyPayment($order, $source);
 
             $save = $order->save();
