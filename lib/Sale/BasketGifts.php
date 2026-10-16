@@ -94,9 +94,12 @@ final class BasketGifts
     }
 
     /**
+     * Zero a granted gift. Stale gift rows are removed only on the last pass,
+     * after delivery, so a rule that starts applying there still has the row.
+     *
      * @param array<string, mixed> $payload
      */
-    public function applyToOrder(Order $order, array $payload): void
+    public function applyToOrder(Order $order, array $payload, bool $dropStale = false): void
     {
         $granted = [];
         foreach ($this->present($order, $payload, [])['lines'] as $line) {
@@ -104,9 +107,6 @@ final class BasketGifts
             if ($productId > 0) {
                 $granted[$productId] = true;
             }
-        }
-        if ($granted === []) {
-            return;
         }
 
         $basket = $order->getBasket();
@@ -123,15 +123,24 @@ final class BasketGifts
 
         $resolved = $this->items->resolve($payload);
         if (count($resolved) !== count($basketItems)) {
+            $this->rezeroCustom($basketItems);
+
             return;
         }
 
         foreach ($resolved as $index => $line) {
             $productId = (int) $line['productId'];
             $source = $this->sourceItem($payload, $index);
-            if (isset($granted[$productId]) && is_array($source) && $this->isEcho($source)) {
+            if (!is_array($source) || !$this->isEcho($source)) {
+                continue;
+            }
+            if (isset($granted[$productId])) {
                 $this->zero($basketItems[$index]);
                 unset($granted[$productId]);
+                continue;
+            }
+            if ($dropStale) {
+                $basketItems[$index]->delete();
             }
         }
     }
@@ -387,6 +396,18 @@ final class BasketGifts
         $raw = $item['quantity'] ?? 0;
 
         return is_numeric($raw) && (float) $raw > 0;
+    }
+
+    /**
+     * @param list<BasketItem> $basketItems
+     */
+    private function rezeroCustom(array $basketItems): void
+    {
+        foreach ($basketItems as $basketItem) {
+            if ((string) $basketItem->getField('CUSTOM_PRICE') === 'Y') {
+                $this->zero($basketItem);
+            }
+        }
     }
 
     private function zero(BasketItem $basketItem): void

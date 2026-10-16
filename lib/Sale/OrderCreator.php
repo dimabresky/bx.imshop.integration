@@ -138,6 +138,8 @@ final class OrderCreator
             $this->gifts->applyToOrder($order, $source);
             $this->applyDelivery($order, $source);
             $order->doFinalAction(true);
+            $this->gifts->applyToOrder($order, $source, true);
+            $order->doFinalAction(true);
             $this->gifts->applyToOrder($order, $source);
             $this->applyPayment($order, $source);
 
