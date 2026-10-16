@@ -21,6 +21,10 @@ final class Registry
         $basket = new BasketWebhook();
         $otp = new OtpRequestWebhook();
         $otpConfirm = new OtpConfirmWebhook();
+        $userGet = new UserGetWebhook();
+        $userUpdate = new UserUpdateWebhook();
+        $userOtp = new UserOtpRequestWebhook();
+        $userOtpConfirm = new UserOtpConfirmWebhook();
         $this->handlers = [
             $delivery->code() => $delivery,
             $payment->code() => $payment,
@@ -31,6 +35,10 @@ final class Registry
             $basket->code() => $basket,
             $otp->code() => $otp,
             $otpConfirm->code() => $otpConfirm,
+            $userGet->code() => $userGet,
+            $userUpdate->code() => $userUpdate,
+            $userOtp->code() => $userOtp,
+            $userOtpConfirm->code() => $userOtpConfirm,
         ];
     }
 

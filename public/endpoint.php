@@ -24,13 +24,23 @@ if (!Loader::includeModule('bx.imshop.integration')) {
         header('Cache-Control: no-store');
     }
 
-    if ($webhookCode === 'otp' || $webhookCode === 'otp/confirm') {
+    if (
+        $webhookCode === 'otp'
+        || $webhookCode === 'otp/confirm'
+        || $webhookCode === 'users'
+        || $webhookCode === 'users/update'
+        || $webhookCode === 'users/otp'
+    ) {
         $payload = [
             'error' => [
                 'message' => 'Модуль интеграции IMSHOP не установлен',
             ],
         ];
-    } elseif ($webhookCode === 'payments/create' || $webhookCode === 'payments/check') {
+    } elseif (
+        $webhookCode === 'payments/create'
+        || $webhookCode === 'payments/check'
+        || $webhookCode === 'users/otp/confirm'
+    ) {
         $payload = [
             'success' => false,
             'error' => 'Модуль интеграции IMSHOP не установлен',

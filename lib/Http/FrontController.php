@@ -6,7 +6,7 @@ use Bx\Imshop\Integration\Config;
 use Bx\Imshop\Integration\Webhook\Registry;
 
 /**
- * Stateless POST router for IMSHOP webhooks.
+ * Stateless router for IMSHOP webhooks. Profile edit is PATCH, every other webhook is POST.
  */
 final class FrontController
 {
@@ -20,7 +20,11 @@ final class FrontController
         $method = (string) ($_SERVER['REQUEST_METHOD'] ?? '');
 
         try {
-            if ($method !== 'POST') {
+            if ($webhookCode === 'users/update') {
+                if ($method !== 'PATCH') {
+                    throw new RequestException('Ожидается PATCH', 405);
+                }
+            } elseif ($method !== 'POST') {
                 throw new RequestException('Ожидается POST', 405);
             }
 
@@ -104,7 +108,13 @@ final class FrontController
      */
     private function errorPayload(string $webhookCode, string $message): array
     {
-        if ($webhookCode === 'otp' || $webhookCode === 'otp/confirm') {
+        if (
+            $webhookCode === 'otp'
+            || $webhookCode === 'otp/confirm'
+            || $webhookCode === 'users'
+            || $webhookCode === 'users/update'
+            || $webhookCode === 'users/otp'
+        ) {
             return [
                 'error' => [
                     'message' => $message,
