@@ -94,13 +94,12 @@ final class BasketGifts
     }
 
     /**
-     * Zero a granted gift and drop a gift row the rule no longer gives.
-     * The returned payload omits dropped rows so a later pass still lines up.
+     * Zero a granted gift. Stale gift rows are removed only on the last pass,
+     * after delivery, so a rule that starts applying there still has the row.
      *
      * @param array<string, mixed> $payload
-     * @return array<string, mixed>
      */
-    public function applyToOrder(Order $order, array $payload): array
+    public function applyToOrder(Order $order, array $payload, bool $dropStale = false): void
     {
         $granted = [];
         foreach ($this->present($order, $payload, [])['lines'] as $line) {
@@ -112,7 +111,7 @@ final class BasketGifts
 
         $basket = $order->getBasket();
         if ($basket === null) {
-            return $payload;
+            return;
         }
 
         $basketItems = [];
@@ -124,10 +123,9 @@ final class BasketGifts
 
         $resolved = $this->items->resolve($payload);
         if (count($resolved) !== count($basketItems)) {
-            return $payload;
+            return;
         }
 
-        $dropped = [];
         foreach ($resolved as $index => $line) {
             $productId = (int) $line['productId'];
             $source = $this->sourceItem($payload, $index);
@@ -139,11 +137,10 @@ final class BasketGifts
                 unset($granted[$productId]);
                 continue;
             }
-            $basketItems[$index]->delete();
-            $dropped[$index] = true;
+            if ($dropStale) {
+                $basketItems[$index]->delete();
+            }
         }
-
-        return $this->withoutResolved($payload, $dropped);
     }
 
     /**
@@ -359,40 +356,6 @@ final class BasketGifts
         $name = is_array($element) ? trim((string) ($element['NAME'] ?? '')) : '';
 
         return $name;
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     * @param array<int, true> $dropped
-     * @return array<string, mixed>
-     */
-    private function withoutResolved(array $payload, array $dropped): array
-    {
-        if ($dropped === []) {
-            return $payload;
-        }
-
-        $items = $payload['items'] ?? null;
-        if (!is_array($items)) {
-            return $payload;
-        }
-
-        $kept = [];
-        $cursor = 0;
-        foreach ($items as $item) {
-            if (!is_array($item) || $this->items->catalogProductId($item) <= 0 || !$this->hasQuantity($item)) {
-                $kept[] = $item;
-                continue;
-            }
-            if (!isset($dropped[$cursor])) {
-                $kept[] = $item;
-            }
-            $cursor++;
-        }
-
-        $payload['items'] = array_values($kept);
-
-        return $payload;
     }
 
     /**
