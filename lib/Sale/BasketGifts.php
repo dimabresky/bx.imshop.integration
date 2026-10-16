@@ -123,6 +123,8 @@ final class BasketGifts
 
         $resolved = $this->items->resolve($payload);
         if (count($resolved) !== count($basketItems)) {
+            $this->rezeroCustom($basketItems);
+
             return;
         }
 
@@ -394,6 +396,18 @@ final class BasketGifts
         $raw = $item['quantity'] ?? 0;
 
         return is_numeric($raw) && (float) $raw > 0;
+    }
+
+    /**
+     * @param list<BasketItem> $basketItems
+     */
+    private function rezeroCustom(array $basketItems): void
+    {
+        foreach ($basketItems as $basketItem) {
+            if ((string) $basketItem->getField('CUSTOM_PRICE') === 'Y') {
+                $this->zero($basketItem);
+            }
+        }
     }
 
     private function zero(BasketItem $basketItem): void
