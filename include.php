@@ -22,6 +22,7 @@ use Bx\Imshop\Integration\Sale\ImshopDeliveryMapper;
 use Bx\Imshop\Integration\Sale\ImshopPaymentMapper;
 use Bx\Imshop\Integration\Sale\LocationResolver;
 use Bx\Imshop\Integration\Sale\OrderCreator;
+use Bx\Imshop\Integration\Sale\OrderStatusMapTable;
 use Bx\Imshop\Integration\Sale\PaymentCalculator;
 use Bx\Imshop\Integration\Sale\StoreStockFilter;
 use Bx\Imshop\Integration\User\OrderBuyer;
@@ -81,6 +82,7 @@ Loader::registerAutoLoadClasses(
         PaymentCalculator::class => 'lib/Sale/PaymentCalculator.php',
         StoreStockFilter::class => 'lib/Sale/StoreStockFilter.php',
         OrderCreator::class => 'lib/Sale/OrderCreator.php',
+        OrderStatusMapTable::class => 'lib/Sale/OrderStatusMapTable.php',
         OrderBuyer::class => 'lib/User/OrderBuyer.php',
         PhoneCode::class => 'lib/User/PhoneCode.php',
         PhoneUserFinder::class => 'lib/User/PhoneUserFinder.php',

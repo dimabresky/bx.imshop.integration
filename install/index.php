@@ -1,8 +1,11 @@
 <?php
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
+use Bx\Imshop\Integration\Sale\OrderStatusMapTable;
 
 Loc::loadMessages(__FILE__);
 
@@ -69,11 +72,27 @@ class bx_imshop_integration extends CModule
 
     public function installDB(): bool
     {
+        if (!Loader::includeModule($this->MODULE_ID)) {
+            return false;
+        }
+
+        OrderStatusMapTable::ensure();
+
         return true;
     }
 
     public function unInstallDB(): bool
     {
+        if (!Loader::includeModule($this->MODULE_ID)) {
+            return false;
+        }
+
+        $connection = Application::getConnection();
+        $table = OrderStatusMapTable::getTableName();
+        if ($connection->isTableExists($table)) {
+            $connection->dropTable($table);
+        }
+
         return true;
     }
 
