@@ -5,6 +5,7 @@ namespace Bx\Imshop\Integration;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\SiteTable;
 use Bitrix\Sale\PersonType;
+use Bx\Imshop\Integration\Sale\OrderStatusMapTable;
 
 /**
  * Module options. Secrets stay in the Bitrix option storage of the stand.
@@ -129,28 +130,40 @@ final class Config
 
     /**
      * IMSHOP status code to a Bitrix order status and the message stored with that change.
-     * Rows without a Bitrix status are omitted. A broken option yields an empty map.
+     * Rows without a Bitrix status are omitted. An empty table yields an empty map.
      *
      * @return array<string, array{status_id: string, message: string}>
      */
     public static function orderStatusMap(): array
     {
-        $decoded = json_decode((string) Option::get(self::MODULE_ID, 'order_status_map', ''), true);
-        if (!is_array($decoded)) {
-            return [];
+        OrderStatusMapTable::ensure();
+
+        $loaded = [];
+        $rows = OrderStatusMapTable::getList([
+            'select' => ['IMSHOP_CODE', 'STATUS_ID', 'MESSAGE'],
+        ]);
+        while ($row = $rows->fetch()) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $code = trim((string) ($row['IMSHOP_CODE'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $loaded[$code] = $row;
         }
 
         $map = [];
         foreach (self::ORDER_STATUS_CODES as $code) {
-            $row = $decoded[$code] ?? null;
+            $row = $loaded[$code] ?? null;
             if (!is_array($row)) {
                 continue;
             }
-            $statusId = trim((string) ($row['status_id'] ?? ''));
+            $statusId = trim((string) ($row['STATUS_ID'] ?? ''));
             if ($statusId === '') {
                 continue;
             }
-            $message = trim((string) ($row['message'] ?? ''));
+            $message = trim((string) ($row['MESSAGE'] ?? ''));
             if (mb_strlen($message) > self::ORDER_STATUS_MESSAGE_MAX) {
                 $message = mb_substr($message, 0, self::ORDER_STATUS_MESSAGE_MAX);
             }

@@ -8,6 +8,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bx\Imshop\Integration\Config;
+use Bx\Imshop\Integration\Sale\OrderStatusMapTable;
 
 global $APPLICATION;
 
@@ -47,7 +48,7 @@ if (
     Option::set($mid, 'stores_require_all_products', !empty($_REQUEST['stores_require_all_products']) ? 'Y' : 'N');
     if (Loader::includeModule('sale')) {
         Option::set($mid, 'pickup_delivery_ids', implode(',', pickupDeliveryIdsFromRequest()));
-        Option::set($mid, 'order_status_map', orderStatusMapFromRequest(orderStatusNames()));
+        saveOrderStatusMap(orderStatusNames());
     }
     $actionMessage = (string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_SAVED');
 }
@@ -295,19 +296,19 @@ function orderStatusNames(): array
 
 /**
  * Keeps a previously saved status that is no longer in the Bitrix list, so saving
- * the other tab does not drop that row. An empty select clears the row.
+ * the other tab does not drop that row. An empty select deletes the row.
  *
  * @param array<string, string> $allowed
  */
-function orderStatusMapFromRequest(array $allowed): string
+function saveOrderStatusMap(array $allowed): void
 {
-    $posted = $_REQUEST['order_status_map'] ?? [];
+    $posted = $_REQUEST['order_status_map'] ?? null;
     if (!is_array($posted)) {
-        return '';
+        return;
     }
 
+    OrderStatusMapTable::ensure();
     $stored = Config::orderStatusMap();
-    $map = [];
     foreach (Config::ORDER_STATUS_CODES as $code) {
         $row = $posted[$code] ?? null;
         if (!is_array($row)) {
@@ -315,6 +316,9 @@ function orderStatusMapFromRequest(array $allowed): string
         }
         $statusId = trim((string) ($row['status_id'] ?? ''));
         if ($statusId === '') {
+            if (isset($stored[$code])) {
+                OrderStatusMapTable::delete($code);
+            }
             continue;
         }
         $kept = isset($stored[$code]) && $stored[$code]['status_id'] === $statusId;
@@ -325,17 +329,14 @@ function orderStatusMapFromRequest(array $allowed): string
         if (mb_strlen($message) > Config::ORDER_STATUS_MESSAGE_MAX) {
             $message = mb_substr($message, 0, Config::ORDER_STATUS_MESSAGE_MAX);
         }
-        $map[$code] = [
-            'status_id' => $statusId,
-            'message' => $message,
+        $fields = [
+            'STATUS_ID' => $statusId,
+            'MESSAGE' => $message,
         ];
+        if (isset($stored[$code])) {
+            OrderStatusMapTable::update($code, $fields);
+        } else {
+            OrderStatusMapTable::add($fields + ['IMSHOP_CODE' => $code]);
+        }
     }
-
-    if ($map === []) {
-        return '';
-    }
-
-    $json = json_encode($map, JSON_UNESCAPED_UNICODE);
-
-    return is_string($json) ? $json : '';
 }
