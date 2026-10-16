@@ -105,9 +105,6 @@ final class BasketGifts
                 $granted[$productId] = true;
             }
         }
-        if ($granted === []) {
-            return;
-        }
 
         $basket = $order->getBasket();
         if ($basket === null) {
@@ -129,10 +126,15 @@ final class BasketGifts
         foreach ($resolved as $index => $line) {
             $productId = (int) $line['productId'];
             $source = $this->sourceItem($payload, $index);
-            if (isset($granted[$productId]) && is_array($source) && $this->isEcho($source)) {
+            if (!is_array($source) || !$this->isEcho($source)) {
+                continue;
+            }
+            if (isset($granted[$productId])) {
                 $this->zero($basketItems[$index]);
                 unset($granted[$productId]);
+                continue;
             }
+            $basketItems[$index]->delete();
         }
     }
 

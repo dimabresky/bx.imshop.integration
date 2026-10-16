@@ -126,27 +126,15 @@ final class BasketCalculator
             ? ['lines' => [], 'extras' => [], 'canSpend' => null, 'gifts' => ['groups' => [], 'lines' => []]]
             : $this->pricedLines($payload, $orderItems, $groups);
         $giftLines = is_array($calculated['gifts']['lines'] ?? null) ? $calculated['gifts']['lines'] : [];
-        $giftIds = [];
-        foreach ($giftLines as $giftLine) {
-            if (is_array($giftLine)) {
-                $giftIds[(int) ($giftLine['id'] ?? 0)] = true;
-            }
-        }
         $responseItems = [];
         $totalPrice = 0.0;
         $discount = 0.0;
 
         foreach ($slots as $slot) {
             if (($slot['echo'] ?? false) === true) {
-                $productId = (int) ($slot['productId'] ?? 0);
-                if (isset($giftIds[$productId])) {
-                    continue;
-                }
-
-                $item = is_array($slot['item'] ?? null) ? $slot['item'] : [];
-                $line = $this->deferred($item, $productId, $this->quantity($item), $groups);
-                $line['selected'] = true;
-            } elseif (isset($slot['lineKey']) && is_string($slot['lineKey'])) {
+                continue;
+            }
+            if (isset($slot['lineKey']) && is_string($slot['lineKey'])) {
                 $line = $calculated['lines'][$slot['lineKey']] ?? $this->unavailable(
                     is_array($slot['item'] ?? null) ? $slot['item'] : [],
                     (int) ($slot['productId'] ?? 0),
