@@ -135,10 +135,10 @@ final class OrderCreator
             $this->fillComment($order, $source);
             $order->setField('XML_ID', $uuid);
             $order->doFinalAction(true);
-            $this->gifts->applyToOrder($order, $source);
+            $giftPayload = $this->gifts->applyToOrder($order, $source);
             $this->applyDelivery($order, $source);
             $order->doFinalAction(true);
-            $this->gifts->applyToOrder($order, $source);
+            $this->gifts->applyToOrder($order, $giftPayload);
             $this->applyPayment($order, $source);
 
             $save = $order->save();
