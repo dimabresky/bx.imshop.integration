@@ -13,6 +13,7 @@ use Bx\Imshop\Integration\Http\RequestException;
 use Bx\Imshop\Integration\Http\RequestLogger;
 use Bx\Imshop\Integration\Sale\AvailabilityCalculator;
 use Bx\Imshop\Integration\Sale\BasketCalculator;
+use Bx\Imshop\Integration\Sale\BasketGifts;
 use Bx\Imshop\Integration\Sale\BePaidAcquiring;
 use Bx\Imshop\Integration\Sale\CalculationOrderFactory;
 use Bx\Imshop\Integration\Sale\CatalogItemResolver;
@@ -69,6 +70,7 @@ Loader::registerAutoLoadClasses(
         OrderWebhook::class => 'lib/Webhook/OrderWebhook.php',
         AvailabilityCalculator::class => 'lib/Sale/AvailabilityCalculator.php',
         BasketCalculator::class => 'lib/Sale/BasketCalculator.php',
+        BasketGifts::class => 'lib/Sale/BasketGifts.php',
         BePaidAcquiring::class => 'lib/Sale/BePaidAcquiring.php',
         CatalogItemResolver::class => 'lib/Sale/CatalogItemResolver.php',
         LocationResolver::class => 'lib/Sale/LocationResolver.php',

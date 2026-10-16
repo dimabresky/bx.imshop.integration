@@ -16,8 +16,8 @@ use Bx\Imshop\Integration\Config;
 use Bx\Imshop\Integration\Http\RequestException;
 
 /**
- * Basket total after Bitrix catalog prices and sale basket rules.
- * The order stays in memory. IMSHOP promo groups and gift cards are not applied.
+ * Basket total after Bitrix catalog prices, sale basket rules and gift rules.
+ * The order stays in memory. IMSHOP gift cards are not applied.
  * bonuses.canSpend is the Aspro spend limit. The balance is not written off.
  */
 final class BasketCalculator
@@ -27,13 +27,13 @@ final class BasketCalculator
     public function __construct(
         private readonly CalculationOrderFactory $orders = new CalculationOrderFactory(),
         private readonly CatalogItemResolver $items = new CatalogItemResolver(),
+        private readonly BasketGifts $gifts = new BasketGifts(),
     ) {
     }
 
     /**
-     * promoGroup, giftCards and promocodes are accepted by the protocol and are not applied.
+     * giftCards are accepted by the protocol and are not applied.
      * authorizedBonuses is the amount the shopper chose to spend. totalPrice stays without that spend.
-     * Marketing actions are a later iteration.
      *
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
@@ -100,6 +100,17 @@ final class BasketCalculator
                 continue;
             }
 
+            if ($this->gifts->isEcho($item)) {
+                $slots[] = $this->isPurchasable($productId)
+                    ? [
+                        'echo' => true,
+                        'item' => $item,
+                        'productId' => $productId,
+                    ]
+                    : $this->unavailable($item, $productId, $quantity);
+                continue;
+            }
+
             $lineKey = 'imshop-' . $index;
             $copy = $item;
             $copy['lineKey'] = $lineKey;
@@ -112,13 +123,17 @@ final class BasketCalculator
         }
 
         $calculated = $orderItems === []
-            ? ['lines' => [], 'extras' => [], 'canSpend' => null]
-            : $this->pricedLines($payload, $orderItems);
+            ? ['lines' => [], 'extras' => [], 'canSpend' => null, 'gifts' => ['groups' => [], 'lines' => []]]
+            : $this->pricedLines($payload, $orderItems, $groups);
+        $giftLines = is_array($calculated['gifts']['lines'] ?? null) ? $calculated['gifts']['lines'] : [];
         $responseItems = [];
         $totalPrice = 0.0;
         $discount = 0.0;
 
         foreach ($slots as $slot) {
+            if (($slot['echo'] ?? false) === true) {
+                continue;
+            }
             if (isset($slot['lineKey']) && is_string($slot['lineKey'])) {
                 $line = $calculated['lines'][$slot['lineKey']] ?? $this->unavailable(
                     is_array($slot['item'] ?? null) ? $slot['item'] : [],
@@ -138,11 +153,23 @@ final class BasketCalculator
             $responseItems[] = $extra;
         }
 
+        foreach ($giftLines as $giftLine) {
+            if (!is_array($giftLine)) {
+                continue;
+            }
+            $this->addToTotals($giftLine, $totalPrice, $discount);
+            $responseItems[] = $giftLine;
+        }
+
         $result = [
             'totalPrice' => PriceMaths::roundPrecision($totalPrice),
             'discount' => PriceMaths::roundPrecision($discount),
             'items' => $responseItems,
         ];
+        $promoGroups = $calculated['gifts']['groups'] ?? null;
+        if (is_array($promoGroups) && $promoGroups !== []) {
+            $result['promoGroups'] = $promoGroups;
+        }
         if (is_float($calculated['canSpend']) || is_int($calculated['canSpend'])) {
             $result['bonuses'] = [
                 'canSpend' => PriceMaths::roundPrecision((float) $calculated['canSpend']),
@@ -155,9 +182,15 @@ final class BasketCalculator
     /**
      * @param array<string, mixed> $payload
      * @param list<array<string, mixed>> $orderItems
-     * @return array{lines: array<string, array<string, mixed>>, extras: list<array<string, mixed>>, canSpend: float|null}
+     * @param list<int> $groups
+     * @return array{
+     *     lines: array<string, array<string, mixed>>,
+     *     extras: list<array<string, mixed>>,
+     *     canSpend: float|null,
+     *     gifts: array{groups: list<list<array<string, mixed>>>, lines: list<array<string, mixed>>}
+     * }
      */
-    private function pricedLines(array $payload, array $orderItems): array
+    private function pricedLines(array $payload, array $orderItems, array $groups): array
     {
         $orderPayload = $payload;
         $orderPayload['items'] = $orderItems;
@@ -181,6 +214,7 @@ final class BasketCalculator
                 'lines' => $lines,
                 'extras' => $extras,
                 'canSpend' => is_array($quote) ? (float) $quote['canSpend'] : null,
+                'gifts' => ['groups' => [], 'lines' => []],
             ];
         }
 
@@ -217,6 +251,7 @@ final class BasketCalculator
             'lines' => $lines,
             'extras' => $extras,
             'canSpend' => is_array($quote) ? (float) $quote['canSpend'] : null,
+            'gifts' => $this->gifts->present($order, $payload, $groups),
         ];
     }
 
@@ -388,6 +423,9 @@ final class BasketCalculator
         }
         if (isset($totals['bonuses']) && is_array($totals['bonuses'])) {
             $response['bonuses'] = $totals['bonuses'];
+        }
+        if (isset($totals['promoGroups']) && is_array($totals['promoGroups'])) {
+            $response['promoGroups'] = $totals['promoGroups'];
         }
 
         return $response;
