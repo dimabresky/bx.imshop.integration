@@ -13,6 +13,25 @@ final class Config
 {
     public const MODULE_ID = 'bx.imshop.integration';
 
+    public const ORDER_STATUS_MESSAGE_MAX = 500;
+
+    /**
+     * IMSHOP order status codes. Admin labels live in the options lang file.
+     *
+     * @var list<string>
+     */
+    public const ORDER_STATUS_CODES = [
+        'placed',
+        'processing',
+        'ready_to_dispatch',
+        'dispatched',
+        'ready_for_pickup',
+        'delivered',
+        'closed',
+        'canceled',
+        'done',
+    ];
+
     public static function isEnabled(): bool
     {
         return Option::get(self::MODULE_ID, 'enabled', 'Y') === 'Y';
@@ -106,5 +125,41 @@ final class Config
     public static function requireStoresWithAllProducts(): bool
     {
         return Option::get(self::MODULE_ID, 'stores_require_all_products', 'N') === 'Y';
+    }
+
+    /**
+     * IMSHOP status code to a Bitrix order status and the message stored with that change.
+     * Rows without a Bitrix status are omitted. A broken option yields an empty map.
+     *
+     * @return array<string, array{status_id: string, message: string}>
+     */
+    public static function orderStatusMap(): array
+    {
+        $decoded = json_decode((string) Option::get(self::MODULE_ID, 'order_status_map', ''), true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $map = [];
+        foreach (self::ORDER_STATUS_CODES as $code) {
+            $row = $decoded[$code] ?? null;
+            if (!is_array($row)) {
+                continue;
+            }
+            $statusId = trim((string) ($row['status_id'] ?? ''));
+            if ($statusId === '') {
+                continue;
+            }
+            $message = trim((string) ($row['message'] ?? ''));
+            if (mb_strlen($message) > self::ORDER_STATUS_MESSAGE_MAX) {
+                $message = mb_substr($message, 0, self::ORDER_STATUS_MESSAGE_MAX);
+            }
+            $map[$code] = [
+                'status_id' => $statusId,
+                'message' => $message,
+            ];
+        }
+
+        return $map;
     }
 }

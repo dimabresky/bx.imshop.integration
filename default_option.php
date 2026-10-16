@@ -10,4 +10,5 @@ $bx_imshop_integration_default_option = [
     'logging_secrets' => 'N',
     'pickup_delivery_ids' => '',
     'stores_require_all_products' => 'N',
+    'order_status_map' => '',
 ];
