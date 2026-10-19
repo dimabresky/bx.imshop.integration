@@ -11,6 +11,7 @@ use Bitrix\Main\Web\Json;
 use Bitrix\Sale\Internals\StatusLangTable;
 use Bitrix\Sale\Order;
 use Bitrix\Sale\Payment;
+use Bitrix\Sale\Shipment;
 use Bx\Imshop\Integration\Config;
 use Bx\Imshop\Integration\Http\RequestException;
 use Bx\Imshop\Integration\Http\RequestLogger;
@@ -83,14 +84,23 @@ final class OrderStatusSync
         }
 
         $sameStatus = (string) $order->getField('STATUS_ID') === $statusId;
-        $alreadyCanceled = (string) $order->getField('CANCELED') === 'Y';
-        if (!$sameStatus || ($code === 'canceled' && !$alreadyCanceled)) {
-            $order->setField('STATUS_ID', $statusId);
-            if ($code === 'canceled') {
-                $order->setField('CANCELED', 'Y');
-                $reason = trim((string) ($payload['reason'] ?? ''));
-                if ($reason !== '') {
-                    $order->setField('REASON_CANCELED', mb_substr($reason, 0, self::REASON_MAX));
+        $cancel = $code === 'canceled'
+            && (string) $order->getField('CANCELED') !== 'Y'
+            && $this->canCancel($order);
+        if (!$sameStatus || $cancel) {
+            if (!$sameStatus) {
+                $statusResult = $order->setField('STATUS_ID', $statusId);
+                if (!$statusResult->isSuccess()) {
+                    throw new RequestException('Не удалось изменить статус заказа', 200);
+                }
+            }
+            if ($cancel) {
+                $cancelResult = $order->setField('CANCELED', 'Y');
+                if ($cancelResult->isSuccess()) {
+                    $reason = trim((string) ($payload['reason'] ?? ''));
+                    if ($reason !== '') {
+                        $order->setField('REASON_CANCELED', mb_substr($reason, 0, self::REASON_MAX));
+                    }
                 }
             }
 
@@ -251,6 +261,26 @@ final class OrderStatusSync
                 'status' => $statusCode,
             ]);
         }
+    }
+
+    /**
+     * Sale refuses CANCELED while a payment is paid or a shipment is shipped.
+     */
+    private function canCancel(Order $order): bool
+    {
+        foreach ($order->getPaymentCollection() as $payment) {
+            if ($payment instanceof Payment && $payment->isPaid()) {
+                return false;
+            }
+        }
+
+        foreach ($order->getShipmentCollection() as $shipment) {
+            if ($shipment instanceof Shipment && !$shipment->isSystem() && $shipment->isShipped()) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function find(string $id): ?Order
