@@ -212,9 +212,14 @@ final class OrderStatusSync
             $body['message'] = $message;
         }
 
-        $userId = $this->digits($this->propertyText($order->getPropertyCollection()->getPhone()));
-        if ($userId !== '') {
-            $body['userId'] = $userId;
+        $userId = (int) $order->getUserId();
+        if ($userId > 0) {
+            $body['userId'] = (string) $userId;
+        } else {
+            $phone = $this->digits($this->propertyText($order->getPropertyCollection()->getPhone()));
+            if ($phone !== '') {
+                $body['userId'] = $phone;
+            }
         }
 
         $paymentId = $order->isPaid() ? $this->paymentId($order) : '';
