@@ -86,7 +86,7 @@ final class OrderStatusSync
         $sameStatus = (string) $order->getField('STATUS_ID') === $statusId;
         $cancel = $code === 'canceled'
             && (string) $order->getField('CANCELED') !== 'Y'
-            && $this->canCancel($order);
+            && self::canCancel($order);
         if (!$sameStatus || $cancel) {
             if (!$sameStatus) {
                 $statusResult = $order->setField('STATUS_ID', $statusId);
@@ -266,7 +266,7 @@ final class OrderStatusSync
     /**
      * Sale refuses CANCELED while a payment is paid or a shipment is shipped.
      */
-    private function canCancel(Order $order): bool
+    public static function canCancel(Order $order): bool
     {
         foreach ($order->getPaymentCollection() as $payment) {
             if ($payment instanceof Payment && $payment->isPaid()) {

@@ -159,7 +159,7 @@ final class OrderHistory
             'appliedDiscount' => $this->money(max(0, (float) $order->getDiscountPrice()), $currency),
             'usedBonuses' => 0,
             'inProgress' => $inProgress,
-            'cancellable' => $inProgress,
+            'cancellable' => $inProgress && OrderStatusSync::canCancel($order),
             'items' => $items,
             'publicDeliveryDetails' => $this->delivery($order),
             'publicPaymentDetails' => $this->payment($order),
