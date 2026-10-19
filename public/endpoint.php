@@ -56,6 +56,13 @@ if (!Loader::includeModule('bx.imshop.integration')) {
             'items' => [],
             'message' => 'Модуль интеграции IMSHOP не установлен',
         ];
+    } elseif ($webhookCode === 'stores') {
+        $payload = [];
+    } elseif ($webhookCode === 'orders/status') {
+        $payload = [
+            'success' => false,
+            'error' => 'Модуль интеграции IMSHOP не установлен',
+        ];
     } else {
         $listKey = $webhookCode === 'payments'
             ? 'payments'

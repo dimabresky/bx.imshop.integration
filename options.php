@@ -46,6 +46,9 @@ if (
     Option::set($mid, 'logging', !empty($_REQUEST['logging']) ? 'Y' : 'N');
     Option::set($mid, 'logging_secrets', !empty($_REQUEST['logging_secrets']) ? 'Y' : 'N');
     Option::set($mid, 'stores_require_all_products', !empty($_REQUEST['stores_require_all_products']) ? 'Y' : 'N');
+    Option::set($mid, 'stores_iblock_id', (string) max(0, (int) ($_REQUEST['stores_iblock_id'] ?? 0)));
+    Option::set($mid, 'status_sync_url', trim((string) ($_REQUEST['status_sync_url'] ?? '')));
+    Option::set($mid, 'status_sync_token', trim((string) ($_REQUEST['status_sync_token'] ?? '')));
     if (Loader::includeModule('sale')) {
         Option::set($mid, 'pickup_delivery_ids', implode(',', pickupDeliveryIdsFromRequest()));
         saveOrderStatusMap(orderStatusNames());
@@ -61,6 +64,9 @@ $personTypeLegalId = (string) Option::get($mid, 'person_type_legal_id', '0');
 $logging = Option::get($mid, 'logging', 'N') === 'Y';
 $loggingSecrets = Option::get($mid, 'logging_secrets', 'N') === 'Y';
 $storesRequireAllProducts = Option::get($mid, 'stores_require_all_products', 'N') === 'Y';
+$storesIblockId = (string) max(0, (int) Option::get($mid, 'stores_iblock_id', '0'));
+$statusSyncUrl = (string) Option::get($mid, 'status_sync_url', '');
+$statusSyncToken = (string) Option::get($mid, 'status_sync_token', '');
 $pickupDeliveryIds = array_fill_keys(Config::pickupDeliveryIds(), true);
 $deliveryServices = activeDeliveryServices();
 $saleLoaded = Loader::includeModule('sale');
@@ -150,6 +156,13 @@ $tabControl->Begin();
             </td>
         </tr>
         <tr>
+            <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STORES_IBLOCK')) ?></td>
+            <td>
+                <input type="number" min="0" name="stores_iblock_id" value="<?= htmlspecialcharsbx($storesIblockId) ?>">
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STORES_IBLOCK_HINT')) ?></div>
+            </td>
+        </tr>
+        <tr>
             <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING')) ?></td>
             <td>
                 <input type="checkbox" name="logging" value="Y"<?= $logging ? ' checked' : '' ?>>
@@ -164,6 +177,20 @@ $tabControl->Begin();
             </td>
         </tr>
     <?php $tabControl->BeginNextTab(); ?>
+        <tr>
+            <td width="40%"><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUS_SYNC_URL')) ?></td>
+            <td>
+                <input type="text" name="status_sync_url" value="<?= htmlspecialcharsbx($statusSyncUrl) ?>" size="60">
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUS_SYNC_URL_HINT')) ?></div>
+            </td>
+        </tr>
+        <tr>
+            <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUS_SYNC_TOKEN')) ?></td>
+            <td>
+                <input type="password" name="status_sync_token" value="<?= htmlspecialcharsbx($statusSyncToken) ?>" size="50" autocomplete="off">
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUS_SYNC_TOKEN_HINT')) ?></div>
+            </td>
+        </tr>
         <?php if (!$saleLoaded) { ?>
             <tr>
                 <td colspan="2"><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_SALE_MISSING')) ?></td>
