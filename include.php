@@ -4,7 +4,6 @@
  * Autoload map for bx.imshop.integration.
  */
 
-use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bx\Imshop\Integration\Config;
 use Bx\Imshop\Integration\Http\AuthGuard;
@@ -109,10 +108,4 @@ Loader::registerAutoLoadClasses(
         UserOtpRequestWebhook::class => 'lib/Webhook/UserOtpRequestWebhook.php',
         UserUpdateWebhook::class => 'lib/Webhook/UserUpdateWebhook.php',
     ]
-);
-
-EventManager::getInstance()->addEventHandler(
-    'sale',
-    'OnSaleStatusOrderChange',
-    [OrderStatusSync::class, 'onSaleStatusOrderChange']
 );

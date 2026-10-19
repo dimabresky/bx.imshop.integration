@@ -2,7 +2,9 @@
 
 namespace Bx\Imshop\Integration\Sale;
 
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Event;
+use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
@@ -107,6 +109,32 @@ final class OrderStatusSync
         }
 
         return $response;
+    }
+
+    /**
+     * Persistent sale handler. Bitrix loads this module when the order status changes.
+     */
+    public static function installHandler(): void
+    {
+        EventManager::getInstance()->registerEventHandler(
+            'sale',
+            'OnSaleStatusOrderChange',
+            Config::MODULE_ID,
+            self::class,
+            'onSaleStatusOrderChange'
+        );
+        Option::set(Config::MODULE_ID, 'status_handler', 'Y');
+    }
+
+    public static function uninstallHandler(): void
+    {
+        EventManager::getInstance()->unRegisterEventHandler(
+            'sale',
+            'OnSaleStatusOrderChange',
+            Config::MODULE_ID,
+            self::class,
+            'onSaleStatusOrderChange'
+        );
     }
 
     public static function onSaleStatusOrderChange(Event $event): void

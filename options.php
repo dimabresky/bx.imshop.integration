@@ -9,6 +9,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bx\Imshop\Integration\Config;
 use Bx\Imshop\Integration\Sale\OrderStatusMapTable;
+use Bx\Imshop\Integration\Sale\OrderStatusSync;
 
 global $APPLICATION;
 
@@ -53,6 +54,7 @@ if (
         Option::set($mid, 'pickup_delivery_ids', implode(',', pickupDeliveryIdsFromRequest()));
         saveOrderStatusMap(orderStatusNames());
     }
+    OrderStatusSync::installHandler();
     $actionMessage = (string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_SAVED');
 }
 
