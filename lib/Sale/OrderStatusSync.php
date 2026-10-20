@@ -17,9 +17,7 @@ use Bx\Imshop\Integration\Http\RequestException;
 use Bx\Imshop\Integration\Http\RequestLogger;
 
 /**
- * IMSHOP order status in both directions.
- * Order::save() here applies a status sent by IMSHOP.
- * A site status change is posted to IMSHOP when the sync URL is set.
+ * Inbound POST cancels the order. A site status change is posted to IMSHOP when the sync URL is set.
  */
 final class OrderStatusSync
 {
@@ -66,11 +64,8 @@ final class OrderStatusSync
         if ($code === '') {
             throw new RequestException('Не передан статус', 400);
         }
-
-        $mapped = Config::orderStatusMap()[$code] ?? null;
-        $statusId = is_array($mapped) ? trim((string) ($mapped['status_id'] ?? '')) : '';
-        if ($statusId === '') {
-            throw new RequestException('Статус не сопоставлен', 200);
+        if ($code !== 'canceled') {
+            throw new RequestException('Поддерживается только отмена заказа', 200);
         }
 
         $order = $this->find($id);
@@ -78,42 +73,30 @@ final class OrderStatusSync
             throw new RequestException('Заказ не найден', 200);
         }
 
-        $message = is_array($mapped) ? trim((string) ($mapped['message'] ?? '')) : '';
-        if ($message === '') {
-            $message = $this->statusName($statusId);
-        }
-
-        $sameStatus = (string) $order->getField('STATUS_ID') === $statusId;
-        $cancel = $code === 'canceled'
-            && (string) $order->getField('CANCELED') !== 'Y'
-            && self::canCancel($order);
-        if (!$sameStatus || $cancel) {
-            if (!$sameStatus) {
-                $statusResult = $order->setField('STATUS_ID', $statusId);
-                if (!$statusResult->isSuccess()) {
-                    throw new RequestException('Не удалось изменить статус заказа', 200);
-                }
+        if ((string) $order->getField('CANCELED') !== 'Y') {
+            if (!self::canCancel($order)) {
+                throw new RequestException('Не удалось отменить заказ', 200);
             }
-            if ($cancel) {
-                $cancelResult = $order->setField('CANCELED', 'Y');
-                if ($cancelResult->isSuccess()) {
-                    $reason = trim((string) ($payload['reason'] ?? ''));
-                    if ($reason !== '') {
-                        $order->setField('REASON_CANCELED', mb_substr($reason, 0, self::REASON_MAX));
-                    }
-                }
+            $cancelResult = $order->setField('CANCELED', 'Y');
+            if (!$cancelResult->isSuccess()) {
+                throw new RequestException('Не удалось отменить заказ', 200);
             }
-
+            $reason = trim((string) ($payload['reason'] ?? ''));
+            if ($reason !== '') {
+                $order->setField('REASON_CANCELED', mb_substr($reason, 0, self::REASON_MAX));
+            }
             $saved = $order->save();
             if (!$saved->isSuccess()) {
-                throw new RequestException('Не удалось изменить статус заказа', 200);
+                throw new RequestException('Не удалось отменить заказ', 200);
             }
         }
 
+        $statusId = (string) $order->getField('STATUS_ID');
         $response = [
             'success' => true,
-            'status' => $statusId,
+            'status' => mb_strtolower($statusId),
         ];
+        $message = $this->statusName($statusId);
         if ($message !== '') {
             $response['message'] = $message;
         }
@@ -195,28 +178,10 @@ final class OrderStatusSync
             return;
         }
 
-        $map = Config::orderStatusMap();
-        $code = '';
-        $message = '';
-        foreach (Config::ORDER_STATUS_CODES as $candidate) {
-            $row = $map[$candidate] ?? null;
-            if (!is_array($row) || trim((string) ($row['status_id'] ?? '')) !== $statusId) {
-                continue;
-            }
-            $code = $candidate;
-            $message = trim((string) ($row['message'] ?? ''));
-            break;
-        }
-        if ($code === '') {
-            return;
-        }
-        if ($message === '') {
-            $message = $this->statusName($statusId);
-        }
-
+        $message = $this->statusName($statusId);
         $body = [
             'id' => (string) $order->getId(),
-            'code' => $code,
+            'code' => mb_strtolower($statusId),
         ];
         if ($message !== '') {
             $body['message'] = $message;
