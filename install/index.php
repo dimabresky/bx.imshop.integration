@@ -122,9 +122,19 @@ class bx_imshop_integration extends CModule
 
     public function installEvents(): void
     {
+        if (!Loader::includeModule($this->MODULE_ID)) {
+            return;
+        }
+
+        \Bx\Imshop\Integration\Sale\OrderStatusSync::installHandler();
     }
 
     public function unInstallEvents(): void
     {
+        if (!Loader::includeModule($this->MODULE_ID)) {
+            return;
+        }
+
+        \Bx\Imshop\Integration\Sale\OrderStatusSync::uninstallHandler();
     }
 }

@@ -17,6 +17,9 @@ final class Registry
         $paymentCreate = new PaymentCreateWebhook();
         $paymentCheck = new PaymentCheckWebhook();
         $order = new OrderWebhook();
+        $orderStatus = new OrderStatusWebhook();
+        $orderHistory = new OrderHistoryWebhook();
+        $stores = new StoreMapWebhook();
         $availability = new CheckQuantityWebhook();
         $basket = new BasketWebhook();
         $otp = new OtpRequestWebhook();
@@ -31,6 +34,9 @@ final class Registry
             $paymentCreate->code() => $paymentCreate,
             $paymentCheck->code() => $paymentCheck,
             $order->code() => $order,
+            $orderStatus->code() => $orderStatus,
+            $orderHistory->code() => $orderHistory,
+            $stores->code() => $stores,
             $availability->code() => $availability,
             $basket->code() => $basket,
             $otp->code() => $otp,
