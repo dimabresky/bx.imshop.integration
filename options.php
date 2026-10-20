@@ -8,7 +8,6 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bx\Imshop\Integration\Config;
-use Bx\Imshop\Integration\Sale\OrderStatusMapTable;
 use Bx\Imshop\Integration\Sale\OrderStatusSync;
 
 global $APPLICATION;
@@ -52,7 +51,6 @@ if (
     Option::set($mid, 'status_sync_token', trim((string) ($_REQUEST['status_sync_token'] ?? '')));
     if (Loader::includeModule('sale')) {
         Option::set($mid, 'pickup_delivery_ids', implode(',', pickupDeliveryIdsFromRequest()));
-        saveOrderStatusMap(orderStatusNames());
     }
     OrderStatusSync::installHandler();
     $actionMessage = (string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_SAVED');
@@ -71,9 +69,6 @@ $statusSyncUrl = (string) Option::get($mid, 'status_sync_url', '');
 $statusSyncToken = (string) Option::get($mid, 'status_sync_token', '');
 $pickupDeliveryIds = array_fill_keys(Config::pickupDeliveryIds(), true);
 $deliveryServices = activeDeliveryServices();
-$saleLoaded = Loader::includeModule('sale');
-$orderStatuses = $saleLoaded ? orderStatusNames() : [];
-$orderStatusMap = Config::orderStatusMap();
 
 $APPLICATION->SetTitle((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_TITLE'));
 
@@ -193,54 +188,9 @@ $tabControl->Begin();
                 <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUS_SYNC_TOKEN_HINT')) ?></div>
             </td>
         </tr>
-        <?php if (!$saleLoaded) { ?>
-            <tr>
-                <td colspan="2"><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_SALE_MISSING')) ?></td>
-            </tr>
-        <?php } else { ?>
-            <tr>
-                <td colspan="2"><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUSES_HINT')) ?></td>
-            </tr>
-            <?php foreach (Config::ORDER_STATUS_CODES as $code) {
-                $savedStatusId = (string) ($orderStatusMap[$code]['status_id'] ?? '');
-                $savedMessage = (string) ($orderStatusMap[$code]['message'] ?? '');
-                $label = (string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUS_' . strtoupper($code));
-                ?>
-                <tr>
-                    <td width="40%" class="adm-detail-valign-top">
-                        <?= htmlspecialcharsbx($code) ?>
-                        <div><?= htmlspecialcharsbx($label) ?></div>
-                    </td>
-                    <td>
-                        <select name="order_status_map[<?= htmlspecialcharsbx($code) ?>][status_id]">
-                            <option value=""><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUS_EMPTY')) ?></option>
-                            <?php if ($savedStatusId !== '' && !isset($orderStatuses[$savedStatusId])) { ?>
-                                <option value="<?= htmlspecialcharsbx($savedStatusId) ?>" selected>
-                                    <?= htmlspecialcharsbx($savedStatusId) ?>
-                                </option>
-                            <?php } ?>
-                            <?php foreach ($orderStatuses as $statusId => $statusName) { ?>
-                                <option value="<?= htmlspecialcharsbx((string) $statusId) ?>"<?= (string) $statusId === $savedStatusId ? ' selected' : '' ?>>
-                                    <?= htmlspecialcharsbx((string) $statusId . ' — ' . $statusName) ?>
-                                </option>
-                            <?php } ?>
-                        </select>
-                        <div style="margin-top:6px;">
-                            <?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUS_MESSAGE')) ?>
-                            <div>
-                                <input
-                                    type="text"
-                                    name="order_status_map[<?= htmlspecialcharsbx($code) ?>][message]"
-                                    value="<?= htmlspecialcharsbx($savedMessage) ?>"
-                                    size="60"
-                                    maxlength="<?= (int) Config::ORDER_STATUS_MESSAGE_MAX ?>"
-                                >
-                            </div>
-                        </div>
-                    </td>
-                </tr>
-            <?php } ?>
-        <?php } ?>
+        <tr>
+            <td colspan="2"><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUSES_HINT')) ?></td>
+        </tr>
     <?php $tabControl->Buttons(); ?>
     <input type="submit" name="Update" value="<?= htmlspecialcharsbx((string) Loc::getMessage('MAIN_SAVE')) ?>" class="adm-btn-save">
     <?php $tabControl->End(); ?>
@@ -295,77 +245,4 @@ function activeDeliveryServices(): array
     }
 
     return $services;
-}
-
-/**
- * @return array<string, string>
- */
-function orderStatusNames(): array
-{
-    if (!Loader::includeModule('sale')) {
-        return [];
-    }
-
-    $names = \Bitrix\Sale\OrderStatus::getAllStatusesNames();
-    if (!is_array($names)) {
-        return [];
-    }
-
-    $statuses = [];
-    foreach ($names as $id => $name) {
-        $id = trim((string) $id);
-        if ($id === '') {
-            continue;
-        }
-        $statuses[$id] = trim((string) $name);
-    }
-
-    return $statuses;
-}
-
-/**
- * Keeps a previously saved status that is no longer in the Bitrix list, so saving
- * the other tab does not drop that row. An empty select deletes the row.
- *
- * @param array<string, string> $allowed
- */
-function saveOrderStatusMap(array $allowed): void
-{
-    $posted = $_REQUEST['order_status_map'] ?? null;
-    if (!is_array($posted)) {
-        return;
-    }
-
-    OrderStatusMapTable::ensure();
-    $stored = Config::orderStatusMap();
-    foreach (Config::ORDER_STATUS_CODES as $code) {
-        $row = $posted[$code] ?? null;
-        if (!is_array($row)) {
-            continue;
-        }
-        $statusId = trim((string) ($row['status_id'] ?? ''));
-        if ($statusId === '') {
-            if (isset($stored[$code])) {
-                OrderStatusMapTable::delete($code);
-            }
-            continue;
-        }
-        $kept = isset($stored[$code]) && $stored[$code]['status_id'] === $statusId;
-        if (!isset($allowed[$statusId]) && !$kept) {
-            continue;
-        }
-        $message = trim((string) ($row['message'] ?? ''));
-        if (mb_strlen($message) > Config::ORDER_STATUS_MESSAGE_MAX) {
-            $message = mb_substr($message, 0, Config::ORDER_STATUS_MESSAGE_MAX);
-        }
-        $fields = [
-            'STATUS_ID' => $statusId,
-            'MESSAGE' => $message,
-        ];
-        if (isset($stored[$code])) {
-            OrderStatusMapTable::update($code, $fields);
-        } else {
-            OrderStatusMapTable::add($fields + ['IMSHOP_CODE' => $code]);
-        }
-    }
 }

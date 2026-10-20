@@ -4,6 +4,8 @@
  * Autoload map for bx.imshop.integration.
  */
 
+use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bx\Imshop\Integration\Config;
 use Bx\Imshop\Integration\Http\AuthGuard;
@@ -23,7 +25,6 @@ use Bx\Imshop\Integration\Sale\ImshopPaymentMapper;
 use Bx\Imshop\Integration\Sale\LocationResolver;
 use Bx\Imshop\Integration\Sale\OrderCreator;
 use Bx\Imshop\Integration\Sale\OrderHistory;
-use Bx\Imshop\Integration\Sale\OrderStatusMapTable;
 use Bx\Imshop\Integration\Sale\OrderStatusSync;
 use Bx\Imshop\Integration\Sale\PaymentCalculator;
 use Bx\Imshop\Integration\Sale\StoreMap;
@@ -92,7 +93,6 @@ Loader::registerAutoLoadClasses(
         StoreStockFilter::class => 'lib/Sale/StoreStockFilter.php',
         OrderCreator::class => 'lib/Sale/OrderCreator.php',
         OrderHistory::class => 'lib/Sale/OrderHistory.php',
-        OrderStatusMapTable::class => 'lib/Sale/OrderStatusMapTable.php',
         OrderStatusSync::class => 'lib/Sale/OrderStatusSync.php',
         StoreMap::class => 'lib/Sale/StoreMap.php',
         OrderBuyer::class => 'lib/User/OrderBuyer.php',
@@ -109,3 +109,11 @@ Loader::registerAutoLoadClasses(
         UserUpdateWebhook::class => 'lib/Webhook/UserUpdateWebhook.php',
     ]
 );
+
+if (Option::get('bx.imshop.integration', 'status_map_dropped', 'N') !== 'Y') {
+    $connection = Application::getConnection();
+    if ($connection->isTableExists('b_bx_imshop_order_status')) {
+        $connection->dropTable('b_bx_imshop_order_status');
+    }
+    Option::set('bx.imshop.integration', 'status_map_dropped', 'Y');
+}
