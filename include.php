@@ -27,7 +27,6 @@ use Bx\Imshop\Integration\Sale\OrderCreator;
 use Bx\Imshop\Integration\Sale\OrderHistory;
 use Bx\Imshop\Integration\Sale\OrderStatusSync;
 use Bx\Imshop\Integration\Sale\PaymentCalculator;
-use Bx\Imshop\Integration\Sale\StoreMap;
 use Bx\Imshop\Integration\Sale\StoreStockFilter;
 use Bx\Imshop\Integration\User\OrderBuyer;
 use Bx\Imshop\Integration\User\PhoneCode;
@@ -41,7 +40,6 @@ use Bx\Imshop\Integration\Webhook\DeliveryWebhook;
 use Bx\Imshop\Integration\Webhook\OrderHistoryWebhook;
 use Bx\Imshop\Integration\Webhook\OrderStatusWebhook;
 use Bx\Imshop\Integration\Webhook\OrderWebhook;
-use Bx\Imshop\Integration\Webhook\StoreMapWebhook;
 use Bx\Imshop\Integration\Webhook\OtpConfirmWebhook;
 use Bx\Imshop\Integration\Webhook\OtpRequestWebhook;
 use Bx\Imshop\Integration\Webhook\PaymentCheckWebhook;
@@ -78,7 +76,6 @@ Loader::registerAutoLoadClasses(
         OrderWebhook::class => 'lib/Webhook/OrderWebhook.php',
         OrderHistoryWebhook::class => 'lib/Webhook/OrderHistoryWebhook.php',
         OrderStatusWebhook::class => 'lib/Webhook/OrderStatusWebhook.php',
-        StoreMapWebhook::class => 'lib/Webhook/StoreMapWebhook.php',
         AvailabilityCalculator::class => 'lib/Sale/AvailabilityCalculator.php',
         BasketCalculator::class => 'lib/Sale/BasketCalculator.php',
         BasketGifts::class => 'lib/Sale/BasketGifts.php',
@@ -94,7 +91,6 @@ Loader::registerAutoLoadClasses(
         OrderCreator::class => 'lib/Sale/OrderCreator.php',
         OrderHistory::class => 'lib/Sale/OrderHistory.php',
         OrderStatusSync::class => 'lib/Sale/OrderStatusSync.php',
-        StoreMap::class => 'lib/Sale/StoreMap.php',
         OrderBuyer::class => 'lib/User/OrderBuyer.php',
         PhoneCode::class => 'lib/User/PhoneCode.php',
         PhoneUserFinder::class => 'lib/User/PhoneUserFinder.php',

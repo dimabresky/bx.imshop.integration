@@ -46,7 +46,6 @@ if (
     Option::set($mid, 'logging', !empty($_REQUEST['logging']) ? 'Y' : 'N');
     Option::set($mid, 'logging_secrets', !empty($_REQUEST['logging_secrets']) ? 'Y' : 'N');
     Option::set($mid, 'stores_require_all_products', !empty($_REQUEST['stores_require_all_products']) ? 'Y' : 'N');
-    Option::set($mid, 'stores_iblock_id', (string) max(0, (int) ($_REQUEST['stores_iblock_id'] ?? 0)));
     Option::set($mid, 'status_sync_url', trim((string) ($_REQUEST['status_sync_url'] ?? '')));
     Option::set($mid, 'status_sync_token', trim((string) ($_REQUEST['status_sync_token'] ?? '')));
     if (Loader::includeModule('sale')) {
@@ -64,7 +63,6 @@ $personTypeLegalId = (string) Option::get($mid, 'person_type_legal_id', '0');
 $logging = Option::get($mid, 'logging', 'N') === 'Y';
 $loggingSecrets = Option::get($mid, 'logging_secrets', 'N') === 'Y';
 $storesRequireAllProducts = Option::get($mid, 'stores_require_all_products', 'N') === 'Y';
-$storesIblockId = (string) max(0, (int) Option::get($mid, 'stores_iblock_id', '0'));
 $statusSyncUrl = (string) Option::get($mid, 'status_sync_url', '');
 $statusSyncToken = (string) Option::get($mid, 'status_sync_token', '');
 $pickupDeliveryIds = array_fill_keys(Config::pickupDeliveryIds(), true);
@@ -150,13 +148,6 @@ $tabControl->Begin();
             <td>
                 <input type="checkbox" name="stores_require_all_products" value="Y"<?= $storesRequireAllProducts ? ' checked' : '' ?>>
                 <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STORES_FULL_BASKET_HINT')) ?></div>
-            </td>
-        </tr>
-        <tr>
-            <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STORES_IBLOCK')) ?></td>
-            <td>
-                <input type="number" min="0" name="stores_iblock_id" value="<?= htmlspecialcharsbx($storesIblockId) ?>">
-                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STORES_IBLOCK_HINT')) ?></div>
             </td>
         </tr>
         <tr>

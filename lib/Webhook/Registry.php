@@ -19,7 +19,6 @@ final class Registry
         $order = new OrderWebhook();
         $orderStatus = new OrderStatusWebhook();
         $orderHistory = new OrderHistoryWebhook();
-        $stores = new StoreMapWebhook();
         $availability = new CheckQuantityWebhook();
         $basket = new BasketWebhook();
         $otp = new OtpRequestWebhook();
@@ -36,7 +35,6 @@ final class Registry
             $order->code() => $order,
             $orderStatus->code() => $orderStatus,
             $orderHistory->code() => $orderHistory,
-            $stores->code() => $stores,
             $availability->code() => $availability,
             $basket->code() => $basket,
             $otp->code() => $otp,
