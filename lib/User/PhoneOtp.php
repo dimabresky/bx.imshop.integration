@@ -234,7 +234,8 @@ final class PhoneOtp
         $fullName = $this->scalarString($payload['fullName'] ?? null);
         if ($fullName === '') {
             return [
-                'dataRequired' => ['fullName'],
+                'dataRequired' => ['fullName', 'birthday', 'email'],
+                'dataOptional' => ['birthday', 'email'],
             ];
         }
 
