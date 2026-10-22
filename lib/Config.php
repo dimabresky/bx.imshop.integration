@@ -33,11 +33,6 @@ final class Config
         return trim((string) Option::get(self::MODULE_ID, 'api_key', ''));
     }
 
-    public static function storesIblockId(): int
-    {
-        return max(0, (int) Option::get(self::MODULE_ID, 'stores_iblock_id', '0'));
-    }
-
     public static function statusSyncUrl(): string
     {
         return trim((string) Option::get(self::MODULE_ID, 'status_sync_url', ''));
