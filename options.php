@@ -51,6 +51,9 @@ if (
     if (Loader::includeModule('sale')) {
         Option::set($mid, 'pickup_delivery_ids', implode(',', pickupDeliveryIdsFromRequest()));
     }
+    if (Loader::includeModule('catalog')) {
+        Option::set($mid, 'online_store_ids', implode(',', onlineStoreIdsFromRequest()));
+    }
     OrderStatusSync::installHandler();
     $actionMessage = (string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_SAVED');
 }
@@ -67,6 +70,8 @@ $statusSyncUrl = (string) Option::get($mid, 'status_sync_url', '');
 $statusSyncToken = (string) Option::get($mid, 'status_sync_token', '');
 $pickupDeliveryIds = array_fill_keys(Config::pickupDeliveryIds(), true);
 $deliveryServices = activeDeliveryServices();
+$onlineStoreIds = array_fill_keys(Config::onlineStoreIds(), true);
+$catalogStores = catalogStores();
 
 $APPLICATION->SetTitle((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_TITLE'));
 
@@ -131,6 +136,19 @@ $tabControl->Begin();
             </td>
         </tr>
         <tr>
+            <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_ONLINE_STORES')) ?></td>
+            <td>
+                <select name="online_store_ids[]" multiple size="8">
+                    <?php foreach ($catalogStores as $storeId => $storeName) { ?>
+                        <option value="<?= (int) $storeId ?>"<?= isset($onlineStoreIds[$storeId]) ? ' selected' : '' ?>>
+                            <?= htmlspecialcharsbx($storeId . ' — ' . $storeName) ?>
+                        </option>
+                    <?php } ?>
+                </select>
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_ONLINE_STORES_HINT')) ?></div>
+            </td>
+        </tr>
+        <tr>
             <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_PICKUP_DELIVERIES')) ?></td>
             <td>
                 <select name="pickup_delivery_ids[]" multiple size="8">
@@ -192,9 +210,25 @@ require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/epilog_admin.p
 /**
  * @return list<int>
  */
+function onlineStoreIdsFromRequest(): array
+{
+    return positiveIdsFromRequest('online_store_ids');
+}
+
+/**
+ * @return list<int>
+ */
 function pickupDeliveryIdsFromRequest(): array
 {
-    $picked = $_REQUEST['pickup_delivery_ids'] ?? [];
+    return positiveIdsFromRequest('pickup_delivery_ids');
+}
+
+/**
+ * @return list<int>
+ */
+function positiveIdsFromRequest(string $name): array
+{
+    $picked = $_REQUEST[$name] ?? [];
     if (!is_array($picked)) {
         return [];
     }
@@ -207,6 +241,41 @@ function pickupDeliveryIdsFromRequest(): array
     }
 
     return array_values(array_unique($ids));
+}
+
+/**
+ * @return array<int, string>
+ */
+function catalogStores(): array
+{
+    if (!Loader::includeModule('catalog')) {
+        return [];
+    }
+
+    $stores = [];
+    $dbList = \CCatalogStore::GetList(
+        ['SORT' => 'ASC', 'TITLE' => 'ASC', 'ID' => 'ASC'],
+        ['ACTIVE' => 'Y'],
+        false,
+        false,
+        ['ID', 'TITLE']
+    );
+    if (!is_object($dbList)) {
+        return [];
+    }
+
+    while ($store = $dbList->Fetch()) {
+        if (!is_array($store)) {
+            continue;
+        }
+        $id = (int) ($store['ID'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+        $stores[$id] = trim((string) ($store['TITLE'] ?? ''));
+    }
+
+    return $stores;
 }
 
 /**

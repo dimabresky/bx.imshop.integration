@@ -9,6 +9,7 @@ $bx_imshop_integration_default_option = [
     'logging' => 'N',
     'logging_secrets' => 'N',
     'pickup_delivery_ids' => '',
+    'online_store_ids' => '',
     'stores_require_all_products' => 'N',
     'status_sync_url' => '',
     'status_sync_token' => '',

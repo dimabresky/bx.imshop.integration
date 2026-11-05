@@ -4,6 +4,8 @@ namespace Bx\Imshop\Integration\Sale;
 
 use Bitrix\Catalog\ProductTable;
 use Bitrix\Catalog\StoreProductTable;
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
 use Bitrix\Sale\Location\LocationTable;
 use Bx\Imshop\Integration\Config;
@@ -78,9 +80,92 @@ final class AvailabilityCalculator
             }
         }
 
+        return $this->applyEvent($city, $warehouses, $availability);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $warehouses
+     * @param list<array<string, mixed>> $availability
+     * @return array{warehouses: list<array<string, mixed>>, availability: list<array<string, mixed>>}
+     */
+    private function applyEvent(string $city, array $warehouses, array $availability): array
+    {
+        $event = new Event(Config::MODULE_ID, 'onAvailabilityWarehousesBuild', [
+            'CITY' => $city,
+            'WAREHOUSES' => $warehouses,
+            'AVAILABILITY' => $availability,
+        ]);
+        $event->send();
+
+        foreach ($event->getResults() as $result) {
+            if (!$result instanceof EventResult || $result->getType() !== EventResult::SUCCESS) {
+                continue;
+            }
+
+            $parameters = $result->getParameters();
+            if (
+                !is_array($parameters)
+                || !isset($parameters['WAREHOUSES'], $parameters['AVAILABILITY'])
+                || !is_array($parameters['WAREHOUSES'])
+                || !is_array($parameters['AVAILABILITY'])
+            ) {
+                continue;
+            }
+
+            $warehouses = $parameters['WAREHOUSES'];
+            $availability = $parameters['AVAILABILITY'];
+        }
+
+        return $this->dropOrphanRows($warehouses, $availability);
+    }
+
+    /**
+     * @param list<mixed> $warehouses
+     * @param list<mixed> $availability
+     * @return array{warehouses: list<array<string, mixed>>, availability: list<array<string, mixed>>}
+     */
+    private function dropOrphanRows(array $warehouses, array $availability): array
+    {
+        $keptWarehouses = [];
+        $warehouseIds = [];
+        foreach ($warehouses as $warehouse) {
+            if (!is_array($warehouse)) {
+                continue;
+            }
+
+            $warehouseId = trim((string) ($warehouse['warehouseId'] ?? ''));
+            if ($warehouseId === '') {
+                continue;
+            }
+
+            $warehouseIds[$warehouseId] = true;
+            $keptWarehouses[] = $warehouse;
+        }
+
+        $keptAvailability = [];
+        $usedWarehouseIds = [];
+        foreach ($availability as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $warehouseId = trim((string) ($row['warehouseId'] ?? ''));
+            if ($warehouseId === '' || !isset($warehouseIds[$warehouseId])) {
+                continue;
+            }
+
+            $keptAvailability[] = $row;
+            $usedWarehouseIds[$warehouseId] = true;
+        }
+
+        $keptWarehouses = array_values(array_filter(
+            $keptWarehouses,
+            static fn (array $warehouse): bool => isset($usedWarehouseIds[(string) ($warehouse['warehouseId'] ?? '')])
+        ));
+
         return [
-            'warehouses' => $warehouses,
-            'availability' => $availability,
+            'warehouses' => $keptWarehouses,
+            'availability' => $keptAvailability,
         ];
     }
 
@@ -188,8 +273,8 @@ final class AvailabilityCalculator
     }
 
     /**
-     * Active site stores. A pickup point is returned only for its location city.
-     * A shipping center is the online warehouse for every requested city, even when it is also a pickup point.
+     * Active site stores that are pickup points or selected online warehouses.
+     * City filtering is left to onAvailabilityWarehousesBuild.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -210,7 +295,6 @@ final class AvailabilityCalculator
                 'GPS_N',
                 'GPS_S',
                 'ISSUING_CENTER',
-                'SHIPPING_CENTER',
                 'LOCATION_ID',
                 'UF_METRO',
             ]
@@ -239,9 +323,10 @@ final class AvailabilityCalculator
         }
 
         $locationNames = $this->locationNames(array_values($locationIds));
+        $onlineStoreIds = array_fill_keys(Config::onlineStoreIds(), true);
         $stores = [];
         foreach ($rows as $store) {
-            $warehouse = $this->warehouse($store, $city, $locationNames);
+            $warehouse = $this->warehouse($store, $city, $locationNames, $onlineStoreIds);
             if ($warehouse === null) {
                 continue;
             }
@@ -292,34 +377,31 @@ final class AvailabilityCalculator
     /**
      * @param array<string, mixed> $store
      * @param array<int, string> $locationNames
+     * @param array<int, true> $onlineStoreIds
      * @return array<string, mixed>|null
      */
-    private function warehouse(array $store, string $city, array $locationNames): ?array
+    private function warehouse(array $store, string $city, array $locationNames, array $onlineStoreIds): ?array
     {
         $name = $this->plainText((string) ($store['TITLE'] ?? ''));
         if ($name === '') {
             return null;
         }
 
+        $storeId = (int) $store['ID'];
         $isShop = $this->isYes($store['ISSUING_CENTER'] ?? null);
-        $isOnline = $this->isYes($store['SHIPPING_CENTER'] ?? null);
+        $isOnline = isset($onlineStoreIds[$storeId]);
         if (!$isShop && !$isOnline) {
             return null;
         }
 
         $storeCity = $locationNames[(int) ($store['LOCATION_ID'] ?? 0)] ?? '';
-        $cityMatches = $this->sameCity($storeCity, $city);
-        if (!$isOnline && !$cityMatches) {
-            return null;
-        }
-
         $warehouseCity = $isOnline ? $city : $storeCity;
         $warehouse = [
-            'warehouseId' => (string) $store['ID'],
+            'warehouseId' => (string) $storeId,
             'name' => $name,
             'address' => $this->plainText((string) ($store['ADDRESS'] ?? '')),
             'online' => $isOnline,
-            'public' => $isShop && (!$isOnline || $cityMatches),
+            'public' => $isShop,
         ];
         if ($warehouseCity !== '') {
             $warehouse['city'] = $warehouseCity;
@@ -396,11 +478,6 @@ final class AvailabilityCalculator
         }
 
         return $rounded;
-    }
-
-    private function sameCity(string $storeCity, string $city): bool
-    {
-        return $city !== '' && $storeCity !== '' && mb_strtolower($storeCity) === mb_strtolower($city);
     }
 
     private function isYes(mixed $value): bool

@@ -110,6 +110,24 @@ final class Config
     }
 
     /**
+     * Catalog store ids marked as online warehouses in the module settings.
+     *
+     * @return list<int>
+     */
+    public static function onlineStoreIds(): array
+    {
+        $raw = (string) Option::get(self::MODULE_ID, 'online_store_ids', '');
+        $ids = [];
+        foreach (preg_split('/\s*,\s*/', $raw) ?: [] as $part) {
+            if (is_numeric($part) && (int) $part > 0) {
+                $ids[] = (int) $part;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
      * Keep Bitrix stores that can fulfill every buyable basket line.
      * Pickup points added by onPickupLocationsBuild are not affected.
      */
