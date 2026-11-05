@@ -401,7 +401,7 @@ final class AvailabilityCalculator
             'name' => $name,
             'address' => $this->plainText((string) ($store['ADDRESS'] ?? '')),
             'online' => $isOnline,
-            'public' => $isShop,
+            'public' => $isShop && (!$isOnline || $this->sameCity($storeCity, $city)),
         ];
         if ($warehouseCity !== '') {
             $warehouse['city'] = $warehouseCity;
@@ -478,6 +478,11 @@ final class AvailabilityCalculator
         }
 
         return $rounded;
+    }
+
+    private function sameCity(string $storeCity, string $city): bool
+    {
+        return $city !== '' && $storeCity !== '' && mb_strtolower($storeCity) === mb_strtolower($city);
     }
 
     private function isYes(mixed $value): bool
