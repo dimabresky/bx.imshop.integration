@@ -4,6 +4,8 @@ namespace Bx\Imshop\Integration\Sale;
 
 use Bitrix\Catalog\ProductTable;
 use Bitrix\Catalog\StoreProductTable;
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
 use Bitrix\Sale\Location\LocationTable;
 use Bx\Imshop\Integration\Config;
@@ -17,11 +19,6 @@ use Bx\Imshop\Integration\Http\RequestException;
 final class AvailabilityCalculator
 {
     private const QUANTITY_EPSILON = 0.000001;
-
-    /**
-     * Same price group as the IMSHOP YML feed (all users).
-     */
-    private const PRICE_GROUP_ID = 2;
 
     private const LANGUAGE_ID = 'ru';
 
@@ -57,7 +54,6 @@ final class AvailabilityCalculator
         }
 
         $stock = $this->stock(array_keys($stores), array_values($productIds));
-        $prices = $this->prices(array_values($productIds));
         $availability = [];
         $usedStoreIds = [];
 
@@ -68,20 +64,11 @@ final class AvailabilityCalculator
                     continue;
                 }
 
-                $row = [
+                $availability[] = [
                     'id' => $item['id'],
                     'warehouseId' => (string) $storeId,
                     'quantity' => $this->quantity($quantity),
                 ];
-                $price = $prices[$item['productId']] ?? null;
-                if ($price !== null) {
-                    $row['price'] = $price['price'];
-                    if (isset($price['preDiscountPrice'])) {
-                        $row['preDiscountPrice'] = $price['preDiscountPrice'];
-                    }
-                }
-
-                $availability[] = $row;
                 $usedStoreIds[$storeId] = true;
             }
         }
@@ -93,9 +80,92 @@ final class AvailabilityCalculator
             }
         }
 
+        return $this->applyEvent($city, $warehouses, $availability);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $warehouses
+     * @param list<array<string, mixed>> $availability
+     * @return array{warehouses: list<array<string, mixed>>, availability: list<array<string, mixed>>}
+     */
+    private function applyEvent(string $city, array $warehouses, array $availability): array
+    {
+        $event = new Event(Config::MODULE_ID, 'onAvailabilityWarehousesBuild', [
+            'CITY' => $city,
+            'WAREHOUSES' => $warehouses,
+            'AVAILABILITY' => $availability,
+        ]);
+        $event->send();
+
+        foreach ($event->getResults() as $result) {
+            if (!$result instanceof EventResult || $result->getType() !== EventResult::SUCCESS) {
+                continue;
+            }
+
+            $parameters = $result->getParameters();
+            if (
+                !is_array($parameters)
+                || !isset($parameters['WAREHOUSES'], $parameters['AVAILABILITY'])
+                || !is_array($parameters['WAREHOUSES'])
+                || !is_array($parameters['AVAILABILITY'])
+            ) {
+                continue;
+            }
+
+            $warehouses = $parameters['WAREHOUSES'];
+            $availability = $parameters['AVAILABILITY'];
+        }
+
+        return $this->dropOrphanRows($warehouses, $availability);
+    }
+
+    /**
+     * @param list<mixed> $warehouses
+     * @param list<mixed> $availability
+     * @return array{warehouses: list<array<string, mixed>>, availability: list<array<string, mixed>>}
+     */
+    private function dropOrphanRows(array $warehouses, array $availability): array
+    {
+        $keptWarehouses = [];
+        $warehouseIds = [];
+        foreach ($warehouses as $warehouse) {
+            if (!is_array($warehouse)) {
+                continue;
+            }
+
+            $warehouseId = trim((string) ($warehouse['warehouseId'] ?? ''));
+            if ($warehouseId === '') {
+                continue;
+            }
+
+            $warehouseIds[$warehouseId] = true;
+            $keptWarehouses[] = $warehouse;
+        }
+
+        $keptAvailability = [];
+        $usedWarehouseIds = [];
+        foreach ($availability as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $warehouseId = trim((string) ($row['warehouseId'] ?? ''));
+            if ($warehouseId === '' || !isset($warehouseIds[$warehouseId])) {
+                continue;
+            }
+
+            $keptAvailability[] = $row;
+            $usedWarehouseIds[$warehouseId] = true;
+        }
+
+        $keptWarehouses = array_values(array_filter(
+            $keptWarehouses,
+            static fn (array $warehouse): bool => isset($usedWarehouseIds[(string) ($warehouse['warehouseId'] ?? '')])
+        ));
+
         return [
-            'warehouses' => $warehouses,
-            'availability' => $availability,
+            'warehouses' => $keptWarehouses,
+            'availability' => $keptAvailability,
         ];
     }
 
@@ -199,17 +269,12 @@ final class AvailabilityCalculator
      */
     private function city(array $payload): string
     {
-        $city = $payload['city'] ?? null;
-        if (!is_string($city)) {
-            return '';
-        }
-
-        return $this->plainText($city);
+        return $this->plainText((new LocationResolver())->cityName($payload));
     }
 
     /**
-     * Active site stores. Pickup points keep their location city.
-     * A shipping center that is not a pickup point is the online warehouse.
+     * Active site stores that are pickup points or selected online warehouses.
+     * City filtering is left to onAvailabilityWarehousesBuild.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -230,7 +295,6 @@ final class AvailabilityCalculator
                 'GPS_N',
                 'GPS_S',
                 'ISSUING_CENTER',
-                'SHIPPING_CENTER',
                 'LOCATION_ID',
                 'UF_METRO',
             ]
@@ -259,9 +323,10 @@ final class AvailabilityCalculator
         }
 
         $locationNames = $this->locationNames(array_values($locationIds));
+        $onlineStoreIds = array_fill_keys(Config::onlineStoreIds(), true);
         $stores = [];
         foreach ($rows as $store) {
-            $warehouse = $this->warehouse($store, $city, $locationNames);
+            $warehouse = $this->warehouse($store, $city, $locationNames, $onlineStoreIds);
             if ($warehouse === null) {
                 continue;
             }
@@ -312,33 +377,31 @@ final class AvailabilityCalculator
     /**
      * @param array<string, mixed> $store
      * @param array<int, string> $locationNames
+     * @param array<int, true> $onlineStoreIds
      * @return array<string, mixed>|null
      */
-    private function warehouse(array $store, string $city, array $locationNames): ?array
+    private function warehouse(array $store, string $city, array $locationNames, array $onlineStoreIds): ?array
     {
         $name = $this->plainText((string) ($store['TITLE'] ?? ''));
         if ($name === '') {
             return null;
         }
 
+        $storeId = (int) $store['ID'];
         $isShop = $this->isYes($store['ISSUING_CENTER'] ?? null);
-        $isOnline = $this->isYes($store['SHIPPING_CENTER'] ?? null) && !$isShop;
+        $isOnline = isset($onlineStoreIds[$storeId]);
         if (!$isShop && !$isOnline) {
             return null;
         }
 
         $storeCity = $locationNames[(int) ($store['LOCATION_ID'] ?? 0)] ?? '';
-        if ($isShop && $city !== '' && $storeCity !== '' && mb_strtolower($storeCity) !== mb_strtolower($city)) {
-            return null;
-        }
-
-        $warehouseCity = $isOnline ? $city : ($storeCity !== '' ? $storeCity : $city);
+        $warehouseCity = $isOnline ? $city : $storeCity;
         $warehouse = [
-            'warehouseId' => (string) $store['ID'],
+            'warehouseId' => (string) $storeId,
             'name' => $name,
             'address' => $this->plainText((string) ($store['ADDRESS'] ?? '')),
             'online' => $isOnline,
-            'public' => $isShop,
+            'public' => $isShop && (!$isOnline || $this->sameCity($storeCity, $city)),
         ];
         if ($warehouseCity !== '') {
             $warehouse['city'] = $warehouseCity;
@@ -407,50 +470,6 @@ final class AvailabilityCalculator
         return $available;
     }
 
-    /**
-     * @param list<int> $productIds
-     * @return array<int, array{price: float, preDiscountPrice?: float}>
-     */
-    private function prices(array $productIds): array
-    {
-        $prices = [];
-        $siteId = Config::getSiteId();
-        foreach ($productIds as $productId) {
-            $optimal = \CCatalogProduct::GetOptimalPrice(
-                $productId,
-                1,
-                [self::PRICE_GROUP_ID],
-                'N',
-                [],
-                $siteId
-            );
-            if (!is_array($optimal)) {
-                continue;
-            }
-
-            $result = $optimal['RESULT_PRICE'] ?? null;
-            if (!is_array($result)) {
-                continue;
-            }
-
-            $base = (float) ($result['BASE_PRICE'] ?? 0);
-            $discount = (float) ($result['DISCOUNT_PRICE'] ?? $base);
-            if ($base <= 0 && $discount <= 0) {
-                continue;
-            }
-
-            $price = $discount > 0 ? $discount : $base;
-            $row = ['price' => $this->money($price)];
-            if ($base > $price) {
-                $row['preDiscountPrice'] = $this->money($base);
-            }
-
-            $prices[$productId] = $row;
-        }
-
-        return $prices;
-    }
-
     private function quantity(float $quantity): int|float
     {
         $rounded = round($quantity, 3);
@@ -461,9 +480,9 @@ final class AvailabilityCalculator
         return $rounded;
     }
 
-    private function money(float $value): float
+    private function sameCity(string $storeCity, string $city): bool
     {
-        return round($value, 2);
+        return $city !== '' && $storeCity !== '' && mb_strtolower($storeCity) === mb_strtolower($city);
     }
 
     private function isYes(mixed $value): bool
