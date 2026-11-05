@@ -18,11 +18,6 @@ final class AvailabilityCalculator
 {
     private const QUANTITY_EPSILON = 0.000001;
 
-    /**
-     * Same price group as the IMSHOP YML feed (all users).
-     */
-    private const PRICE_GROUP_ID = 2;
-
     private const LANGUAGE_ID = 'ru';
 
     /**
@@ -57,7 +52,6 @@ final class AvailabilityCalculator
         }
 
         $stock = $this->stock(array_keys($stores), array_values($productIds));
-        $prices = $this->prices(array_values($productIds));
         $availability = [];
         $usedStoreIds = [];
 
@@ -68,20 +62,11 @@ final class AvailabilityCalculator
                     continue;
                 }
 
-                $row = [
+                $availability[] = [
                     'id' => $item['id'],
                     'warehouseId' => (string) $storeId,
                     'quantity' => $this->quantity($quantity),
                 ];
-                $price = $prices[$item['productId']] ?? null;
-                if ($price !== null) {
-                    $row['price'] = $price['price'];
-                    if (isset($price['preDiscountPrice'])) {
-                        $row['preDiscountPrice'] = $price['preDiscountPrice'];
-                    }
-                }
-
-                $availability[] = $row;
                 $usedStoreIds[$storeId] = true;
             }
         }
@@ -199,17 +184,12 @@ final class AvailabilityCalculator
      */
     private function city(array $payload): string
     {
-        $city = $payload['city'] ?? null;
-        if (!is_string($city)) {
-            return '';
-        }
-
-        return $this->plainText($city);
+        return $this->plainText((new LocationResolver())->cityName($payload));
     }
 
     /**
-     * Active site stores. Pickup points keep their location city.
-     * A shipping center that is not a pickup point is the online warehouse.
+     * Active site stores. A pickup point is returned only for its location city.
+     * A shipping center is the online warehouse for every requested city, even when it is also a pickup point.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -322,23 +302,24 @@ final class AvailabilityCalculator
         }
 
         $isShop = $this->isYes($store['ISSUING_CENTER'] ?? null);
-        $isOnline = $this->isYes($store['SHIPPING_CENTER'] ?? null) && !$isShop;
+        $isOnline = $this->isYes($store['SHIPPING_CENTER'] ?? null);
         if (!$isShop && !$isOnline) {
             return null;
         }
 
         $storeCity = $locationNames[(int) ($store['LOCATION_ID'] ?? 0)] ?? '';
-        if ($isShop && $city !== '' && $storeCity !== '' && mb_strtolower($storeCity) !== mb_strtolower($city)) {
+        $cityMatches = $this->sameCity($storeCity, $city);
+        if (!$isOnline && !$cityMatches) {
             return null;
         }
 
-        $warehouseCity = $isOnline ? $city : ($storeCity !== '' ? $storeCity : $city);
+        $warehouseCity = $isOnline ? $city : $storeCity;
         $warehouse = [
             'warehouseId' => (string) $store['ID'],
             'name' => $name,
             'address' => $this->plainText((string) ($store['ADDRESS'] ?? '')),
             'online' => $isOnline,
-            'public' => $isShop,
+            'public' => $isShop && (!$isOnline || $cityMatches),
         ];
         if ($warehouseCity !== '') {
             $warehouse['city'] = $warehouseCity;
@@ -407,50 +388,6 @@ final class AvailabilityCalculator
         return $available;
     }
 
-    /**
-     * @param list<int> $productIds
-     * @return array<int, array{price: float, preDiscountPrice?: float}>
-     */
-    private function prices(array $productIds): array
-    {
-        $prices = [];
-        $siteId = Config::getSiteId();
-        foreach ($productIds as $productId) {
-            $optimal = \CCatalogProduct::GetOptimalPrice(
-                $productId,
-                1,
-                [self::PRICE_GROUP_ID],
-                'N',
-                [],
-                $siteId
-            );
-            if (!is_array($optimal)) {
-                continue;
-            }
-
-            $result = $optimal['RESULT_PRICE'] ?? null;
-            if (!is_array($result)) {
-                continue;
-            }
-
-            $base = (float) ($result['BASE_PRICE'] ?? 0);
-            $discount = (float) ($result['DISCOUNT_PRICE'] ?? $base);
-            if ($base <= 0 && $discount <= 0) {
-                continue;
-            }
-
-            $price = $discount > 0 ? $discount : $base;
-            $row = ['price' => $this->money($price)];
-            if ($base > $price) {
-                $row['preDiscountPrice'] = $this->money($base);
-            }
-
-            $prices[$productId] = $row;
-        }
-
-        return $prices;
-    }
-
     private function quantity(float $quantity): int|float
     {
         $rounded = round($quantity, 3);
@@ -461,9 +398,9 @@ final class AvailabilityCalculator
         return $rounded;
     }
 
-    private function money(float $value): float
+    private function sameCity(string $storeCity, string $city): bool
     {
-        return round($value, 2);
+        return $city !== '' && $storeCity !== '' && mb_strtolower($storeCity) === mb_strtolower($city);
     }
 
     private function isYes(mixed $value): bool
