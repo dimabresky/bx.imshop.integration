@@ -255,7 +255,10 @@ function catalogStores(): array
     $stores = [];
     $dbList = \CCatalogStore::GetList(
         ['SORT' => 'ASC', 'TITLE' => 'ASC', 'ID' => 'ASC'],
-        ['ACTIVE' => 'Y'],
+        [
+            'ACTIVE' => 'Y',
+            '+SITE_ID' => Config::getSiteId(),
+        ],
         false,
         false,
         ['ID', 'TITLE']
