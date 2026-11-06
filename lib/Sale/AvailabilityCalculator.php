@@ -59,11 +59,11 @@ final class AvailabilityCalculator
 
         foreach ($items as $item) {
             foreach ($stores as $storeId => $warehouse) {
-                $quantity = $stock[$storeId][$item['productId']] ?? 0.0;
-                if ($quantity <= self::QUANTITY_EPSILON) {
+                if (!isset($stock[$storeId][$item['productId']])) {
                     continue;
                 }
 
+                $quantity = $stock[$storeId][$item['productId']];
                 $availability[] = [
                     'id' => $item['id'],
                     'warehouseId' => (string) $storeId,
