@@ -2,10 +2,13 @@
 
 namespace Bx\Imshop\Integration\User;
 
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
 use Bitrix\Main\Security\Mfa\TotpAlgorithm;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\UserPhoneAuthTable;
 use Bitrix\Main\UserTable;
+use Bx\Imshop\Integration\Config;
 
 /**
  * IMSHOP account object shared by login, profile read and profile edit.
@@ -42,7 +45,7 @@ final class UserProfile
                 $user['phone'] = $phone;
             }
 
-            return $user;
+            return $this->applyProfileEvent($user, $userId);
         }
 
         $name = trim(implode(' ', array_filter(
@@ -88,7 +91,7 @@ final class UserProfile
 
         $this->appendLoyalty($user, $userId);
 
-        return $user;
+        return $this->applyProfileEvent($user, $userId);
     }
 
     public function maskPhone(string $phone): string
@@ -173,6 +176,40 @@ final class UserProfile
         }
 
         return false;
+    }
+
+    /**
+     * Last successful USER array replaces the profile. Other results are ignored.
+     *
+     * @param array<string, mixed> $user
+     * @return array<string, mixed>
+     */
+    private function applyProfileEvent(array $user, int $userId): array
+    {
+        $event = new Event(Config::MODULE_ID, 'onUserProfileBuild', [
+            'USER' => $user,
+            'USER_ID' => $userId,
+        ]);
+        $event->send();
+
+        foreach ($event->getResults() as $result) {
+            if (!$result instanceof EventResult || $result->getType() !== EventResult::SUCCESS) {
+                continue;
+            }
+
+            $parameters = $result->getParameters();
+            if (
+                !is_array($parameters)
+                || !isset($parameters['USER'])
+                || !is_array($parameters['USER'])
+            ) {
+                continue;
+            }
+
+            $user = $parameters['USER'];
+        }
+
+        return $user;
     }
 
     /**
