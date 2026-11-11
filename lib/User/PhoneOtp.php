@@ -3,6 +3,8 @@
 namespace Bx\Imshop\Integration\User;
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Sms\Event as SmsEvent;
 use Bitrix\Main\Type\DateTime;
@@ -233,10 +235,10 @@ final class PhoneOtp
     {
         $fullName = $this->scalarString($payload['fullName'] ?? null);
         if ($fullName === '') {
-            return [
+            return $this->applyRegistrationEvent([
                 'dataRequired' => ['fullName', 'birthday', 'email'],
                 'dataOptional' => ['birthday', 'email'],
-            ];
+            ], $payload);
         }
 
         $email = $this->scalarString($payload['email'] ?? null);
@@ -296,6 +298,41 @@ final class PhoneOtp
         $this->notifyRegistered($userId);
 
         return $userId;
+    }
+
+    /**
+     * Last successful RESPONSE array replaces the registration payload. Other results are ignored.
+     *
+     * @param array<string, mixed> $response
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function applyRegistrationEvent(array $response, array $payload): array
+    {
+        $event = new Event(Config::MODULE_ID, 'onOtpRegistrationDataBuild', [
+            'RESPONSE' => $response,
+            'PAYLOAD' => $payload,
+        ]);
+        $event->send();
+
+        foreach ($event->getResults() as $result) {
+            if (!$result instanceof EventResult || $result->getType() !== EventResult::SUCCESS) {
+                continue;
+            }
+
+            $parameters = $result->getParameters();
+            if (
+                !is_array($parameters)
+                || !isset($parameters['RESPONSE'])
+                || !is_array($parameters['RESPONSE'])
+            ) {
+                continue;
+            }
+
+            $response = $parameters['RESPONSE'];
+        }
+
+        return $response;
     }
 
     /**
