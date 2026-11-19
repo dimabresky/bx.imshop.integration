@@ -14,15 +14,32 @@ use Bitrix\Main\Loader;
 final class CatalogItemResolver
 {
     /**
+     * Catalog element id for an IMSHOP line, or 0 when the offer is unknown.
+     *
+     * @param array<string, mixed> $item
+     */
+    public function catalogProductId(array $item): int
+    {
+        if (!Loader::includeModule('catalog')) {
+            return 0;
+        }
+
+        $productId = $this->productId($item);
+        if ($productId <= 0) {
+            return 0;
+        }
+
+        $product = ProductTable::getByPrimary($productId, ['select' => ['ID']])->fetch();
+
+        return is_array($product) ? $productId : 0;
+    }
+
+    /**
      * @param array<string, mixed> $payload
-     * @return list<array{productId: int, quantity: float}>
+     * @return list<array{productId: int, quantity: float, lineKey?: string}>
      */
     public function resolve(array $payload): array
     {
-        if (!Loader::includeModule('catalog')) {
-            return [];
-        }
-
         $items = $payload['items'] ?? null;
         if (!is_array($items)) {
             return [];
@@ -34,21 +51,22 @@ final class CatalogItemResolver
                 continue;
             }
 
-            $productId = $this->productId($item);
+            $productId = $this->catalogProductId($item);
             $quantity = $this->quantity($item);
             if ($productId <= 0 || $quantity <= 0) {
                 continue;
             }
 
-            $product = ProductTable::getByPrimary($productId, ['select' => ['ID']])->fetch();
-            if (!is_array($product)) {
-                continue;
-            }
-
-            $resolved[] = [
+            $line = [
                 'productId' => $productId,
                 'quantity' => $quantity,
             ];
+            $lineKey = $item['lineKey'] ?? null;
+            if (is_string($lineKey) && $lineKey !== '') {
+                $line['lineKey'] = $lineKey;
+            }
+
+            $resolved[] = $line;
         }
 
         return $resolved;

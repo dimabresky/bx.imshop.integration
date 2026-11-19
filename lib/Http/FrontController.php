@@ -6,7 +6,8 @@ use Bx\Imshop\Integration\Config;
 use Bx\Imshop\Integration\Webhook\Registry;
 
 /**
- * Stateless POST router for IMSHOP webhooks.
+ * Stateless router for IMSHOP webhooks.
+ * Profile edit is PATCH, every other webhook is POST.
  */
 final class FrontController
 {
@@ -20,7 +21,11 @@ final class FrontController
         $method = (string) ($_SERVER['REQUEST_METHOD'] ?? '');
 
         try {
-            if ($method !== 'POST') {
+            if ($webhookCode === 'users/update') {
+                if ($method !== 'PATCH') {
+                    throw new RequestException('Ожидается PATCH', 405);
+                }
+            } elseif ($method !== 'POST') {
                 throw new RequestException('Ожидается POST', 405);
             }
 
@@ -104,22 +109,53 @@ final class FrontController
      */
     private function errorPayload(string $webhookCode, string $message): array
     {
-        if ($webhookCode === 'deliveries' || $webhookCode === 'payments') {
+        if (
+            $webhookCode === 'otp'
+            || $webhookCode === 'otp/confirm'
+            || $webhookCode === 'users'
+            || $webhookCode === 'users/update'
+            || $webhookCode === 'users/otp'
+        ) {
             return [
-                $webhookCode => [],
-                'message' => $message,
+                'error' => [
+                    'message' => $message,
+                ],
             ];
         }
 
-        return ['message' => $message];
+        $handler = $this->registry->get($webhookCode);
+        $keys = $handler?->responseListKeys() ?? [];
+        if ($keys === []) {
+            $listKey = $handler?->responseKey() ?? '';
+            $keys = $listKey !== '' ? [$listKey] : [];
+        }
+
+        if ($keys === []) {
+            if ($handler !== null) {
+                return [
+                    'success' => false,
+                    'error' => $message,
+                ];
+            }
+
+            return ['message' => $message];
+        }
+
+        $payload = [];
+        foreach ($keys as $key) {
+            if ($key !== '') {
+                $payload[$key] = [];
+            }
+        }
+        $payload['message'] = $message;
+
+        return $payload;
     }
 
     private function failureMessage(string $webhookCode): string
     {
-        if ($webhookCode === 'payments') {
-            return 'Не удалось рассчитать способы оплаты';
-        }
+        $message = $this->registry->get($webhookCode)?->failureMessage() ?? '';
 
-        return 'Не удалось рассчитать доставку';
+        return $message !== '' ? $message : 'Не удалось рассчитать доставку';
     }
 }

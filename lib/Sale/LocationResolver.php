@@ -88,6 +88,32 @@ final class LocationResolver
     }
 
     /**
+     * @param array<string, mixed> $payload
+     * @return array{lat: float, lon: float}|null
+     */
+    public function coordinates(array $payload): ?array
+    {
+        $address = $payload['addressData'] ?? null;
+        if (!is_array($address)) {
+            return null;
+        }
+
+        $lat = $address['lat'] ?? null;
+        $lon = $address['lon'] ?? null;
+        if (!is_numeric($lat) || !is_numeric($lon)) {
+            return null;
+        }
+
+        $latitude = (float) $lat;
+        $longitude = (float) $lon;
+        if (($latitude === 0.0 && $longitude === 0.0) || $latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
+            return null;
+        }
+
+        return ['lat' => $latitude, 'lon' => $longitude];
+    }
+
+    /**
      * @param array<string, mixed> $address
      * @return list<string>
      */

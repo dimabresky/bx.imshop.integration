@@ -19,6 +19,24 @@ final class PaymentWebhook implements WebhookHandlerInterface
         return 'payments';
     }
 
+    public function responseKey(): string
+    {
+        return $this->code();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function responseListKeys(): array
+    {
+        return [$this->responseKey()];
+    }
+
+    public function failureMessage(): string
+    {
+        return 'Не удалось рассчитать способы оплаты';
+    }
+
     /**
      * @param array<string, mixed> $payload
      * @return array<string, mixed>

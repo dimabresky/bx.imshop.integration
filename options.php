@@ -7,6 +7,8 @@
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bx\Imshop\Integration\Config;
+use Bx\Imshop\Integration\Sale\OrderStatusSync;
 
 global $APPLICATION;
 
@@ -43,6 +45,16 @@ if (
     Option::set($mid, 'person_type_legal_id', (string) max(0, (int) ($_REQUEST['person_type_legal_id'] ?? 0)));
     Option::set($mid, 'logging', !empty($_REQUEST['logging']) ? 'Y' : 'N');
     Option::set($mid, 'logging_secrets', !empty($_REQUEST['logging_secrets']) ? 'Y' : 'N');
+    Option::set($mid, 'stores_require_all_products', !empty($_REQUEST['stores_require_all_products']) ? 'Y' : 'N');
+    Option::set($mid, 'status_sync_url', trim((string) ($_REQUEST['status_sync_url'] ?? '')));
+    Option::set($mid, 'status_sync_token', trim((string) ($_REQUEST['status_sync_token'] ?? '')));
+    if (Loader::includeModule('sale')) {
+        Option::set($mid, 'pickup_delivery_ids', implode(',', pickupDeliveryIdsFromRequest()));
+    }
+    if (Loader::includeModule('catalog')) {
+        Option::set($mid, 'online_store_ids', implode(',', onlineStoreIdsFromRequest()));
+    }
+    OrderStatusSync::installHandler();
     $actionMessage = (string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_SAVED');
 }
 
@@ -53,6 +65,13 @@ $personTypeId = (string) Option::get($mid, 'person_type_id', '0');
 $personTypeLegalId = (string) Option::get($mid, 'person_type_legal_id', '0');
 $logging = Option::get($mid, 'logging', 'N') === 'Y';
 $loggingSecrets = Option::get($mid, 'logging_secrets', 'N') === 'Y';
+$storesRequireAllProducts = Option::get($mid, 'stores_require_all_products', 'N') === 'Y';
+$statusSyncUrl = (string) Option::get($mid, 'status_sync_url', '');
+$statusSyncToken = (string) Option::get($mid, 'status_sync_token', '');
+$pickupDeliveryIds = array_fill_keys(Config::pickupDeliveryIds(), true);
+$deliveryServices = activeDeliveryServices();
+$onlineStoreIds = array_fill_keys(Config::onlineStoreIds(), true);
+$catalogStores = catalogStores();
 
 $APPLICATION->SetTitle((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_TITLE'));
 
@@ -64,10 +83,24 @@ if ($actionMessage !== '') {
         'TYPE' => 'OK',
     ]);
 }
+$tabs = [
+    [
+        'DIV' => 'bx_imshop_main',
+        'TAB' => (string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_TAB_MAIN'),
+        'TITLE' => (string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_TAB_MAIN'),
+    ],
+    [
+        'DIV' => 'bx_imshop_statuses',
+        'TAB' => (string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_TAB_STATUSES'),
+        'TITLE' => (string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_TAB_STATUSES'),
+    ],
+];
+$tabControl = new CAdminTabControl('bxImshopOptions', $tabs);
+$tabControl->Begin();
 ?>
 <form method="post" action="<?= $APPLICATION->GetCurPage() ?>?mid=<?= htmlspecialcharsbx($mid) ?>&lang=<?= LANGUAGE_ID ?>">
     <?= bitrix_sessid_post() ?>
-    <table class="adm-detail-content-table edit-table">
+    <?php $tabControl->BeginNextTab(); ?>
         <tr>
             <td width="40%"><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_ENABLED')) ?></td>
             <td><input type="checkbox" name="enabled" value="Y"<?= $enabled ? ' checked' : '' ?>></td>
@@ -103,6 +136,39 @@ if ($actionMessage !== '') {
             </td>
         </tr>
         <tr>
+            <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_ONLINE_STORES')) ?></td>
+            <td>
+                <select name="online_store_ids[]" multiple size="8">
+                    <?php foreach ($catalogStores as $storeId => $storeName) { ?>
+                        <option value="<?= (int) $storeId ?>"<?= isset($onlineStoreIds[$storeId]) ? ' selected' : '' ?>>
+                            <?= htmlspecialcharsbx($storeId . ' — ' . $storeName) ?>
+                        </option>
+                    <?php } ?>
+                </select>
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_ONLINE_STORES_HINT')) ?></div>
+            </td>
+        </tr>
+        <tr>
+            <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_PICKUP_DELIVERIES')) ?></td>
+            <td>
+                <select name="pickup_delivery_ids[]" multiple size="8">
+                    <?php foreach ($deliveryServices as $deliveryId => $deliveryName) { ?>
+                        <option value="<?= (int) $deliveryId ?>"<?= isset($pickupDeliveryIds[$deliveryId]) ? ' selected' : '' ?>>
+                            <?= htmlspecialcharsbx($deliveryId . ' — ' . $deliveryName) ?>
+                        </option>
+                    <?php } ?>
+                </select>
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_PICKUP_DELIVERIES_HINT')) ?></div>
+            </td>
+        </tr>
+        <tr>
+            <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STORES_FULL_BASKET')) ?></td>
+            <td>
+                <input type="checkbox" name="stores_require_all_products" value="Y"<?= $storesRequireAllProducts ? ' checked' : '' ?>>
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STORES_FULL_BASKET_HINT')) ?></div>
+            </td>
+        </tr>
+        <tr>
             <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING')) ?></td>
             <td>
                 <input type="checkbox" name="logging" value="Y"<?= $logging ? ' checked' : '' ?>>
@@ -116,8 +182,130 @@ if ($actionMessage !== '') {
                 <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_LOGGING_SECRETS_HINT')) ?></div>
             </td>
         </tr>
-    </table>
+    <?php $tabControl->BeginNextTab(); ?>
+        <tr>
+            <td width="40%"><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUS_SYNC_URL')) ?></td>
+            <td>
+                <input type="text" name="status_sync_url" value="<?= htmlspecialcharsbx($statusSyncUrl) ?>" size="60">
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUS_SYNC_URL_HINT')) ?></div>
+            </td>
+        </tr>
+        <tr>
+            <td><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUS_SYNC_TOKEN')) ?></td>
+            <td>
+                <input type="password" name="status_sync_token" value="<?= htmlspecialcharsbx($statusSyncToken) ?>" size="50" autocomplete="off">
+                <div><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUS_SYNC_TOKEN_HINT')) ?></div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2"><?= htmlspecialcharsbx((string) Loc::getMessage('BX_IMSHOP_INTEGRATION_OPTIONS_STATUSES_HINT')) ?></td>
+        </tr>
+    <?php $tabControl->Buttons(); ?>
     <input type="submit" name="Update" value="<?= htmlspecialcharsbx((string) Loc::getMessage('MAIN_SAVE')) ?>" class="adm-btn-save">
+    <?php $tabControl->End(); ?>
 </form>
 <?php
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/epilog_admin.php';
+
+/**
+ * @return list<int>
+ */
+function onlineStoreIdsFromRequest(): array
+{
+    return positiveIdsFromRequest('online_store_ids');
+}
+
+/**
+ * @return list<int>
+ */
+function pickupDeliveryIdsFromRequest(): array
+{
+    return positiveIdsFromRequest('pickup_delivery_ids');
+}
+
+/**
+ * @return list<int>
+ */
+function positiveIdsFromRequest(string $name): array
+{
+    $picked = $_REQUEST[$name] ?? [];
+    if (!is_array($picked)) {
+        return [];
+    }
+
+    $ids = [];
+    foreach ($picked as $id) {
+        if (is_numeric($id) && (int) $id > 0) {
+            $ids[] = (int) $id;
+        }
+    }
+
+    return array_values(array_unique($ids));
+}
+
+/**
+ * @return array<int, string>
+ */
+function catalogStores(): array
+{
+    if (!Loader::includeModule('catalog')) {
+        return [];
+    }
+
+    $stores = [];
+    $dbList = \CCatalogStore::GetList(
+        ['SORT' => 'ASC', 'TITLE' => 'ASC', 'ID' => 'ASC'],
+        [
+            'ACTIVE' => 'Y',
+            '+SITE_ID' => Config::getSiteId(),
+        ],
+        false,
+        false,
+        ['ID', 'TITLE']
+    );
+    if (!is_object($dbList)) {
+        return [];
+    }
+
+    while ($store = $dbList->Fetch()) {
+        if (!is_array($store)) {
+            continue;
+        }
+        $id = (int) ($store['ID'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+        $stores[$id] = trim((string) ($store['TITLE'] ?? ''));
+    }
+
+    return $stores;
+}
+
+/**
+ * @return array<int, string>
+ */
+function activeDeliveryServices(): array
+{
+    if (!Loader::includeModule('sale')) {
+        return [];
+    }
+
+    $services = [];
+    $rows = \Bitrix\Sale\Delivery\Services\Table::getList([
+        'select' => ['ID', 'NAME'],
+        'filter' => ['=ACTIVE' => 'Y'],
+        'order' => ['SORT' => 'ASC', 'NAME' => 'ASC'],
+    ]);
+    while ($row = $rows->fetch()) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $id = (int) ($row['ID'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+        $services[$id] = trim((string) ($row['NAME'] ?? ''));
+    }
+
+    return $services;
+}

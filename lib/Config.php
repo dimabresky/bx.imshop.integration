@@ -33,6 +33,16 @@ final class Config
         return trim((string) Option::get(self::MODULE_ID, 'api_key', ''));
     }
 
+    public static function statusSyncUrl(): string
+    {
+        return trim((string) Option::get(self::MODULE_ID, 'status_sync_url', ''));
+    }
+
+    public static function statusSyncToken(): string
+    {
+        return trim((string) Option::get(self::MODULE_ID, 'status_sync_token', ''));
+    }
+
     public static function getSiteId(): string
     {
         $siteId = trim((string) Option::get(self::MODULE_ID, 'site_id', ''));
@@ -74,5 +84,55 @@ final class Config
         $firstId = (int) array_key_first($personTypes);
 
         return $firstId > 0 ? $firstId : max(0, $configured);
+    }
+
+    /**
+     * Delivery service ids marked as pickup points in the module settings.
+     *
+     * @return list<int>
+     */
+    public static function pickupDeliveryIds(): array
+    {
+        $raw = (string) Option::get(self::MODULE_ID, 'pickup_delivery_ids', '');
+        $ids = [];
+        foreach (preg_split('/\s*,\s*/', $raw) ?: [] as $part) {
+            if (is_numeric($part) && (int) $part > 0) {
+                $ids[] = (int) $part;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    public static function isPickupDelivery(int $deliveryId): bool
+    {
+        return $deliveryId > 0 && in_array($deliveryId, self::pickupDeliveryIds(), true);
+    }
+
+    /**
+     * Catalog store ids marked as online warehouses in the module settings.
+     *
+     * @return list<int>
+     */
+    public static function onlineStoreIds(): array
+    {
+        $raw = (string) Option::get(self::MODULE_ID, 'online_store_ids', '');
+        $ids = [];
+        foreach (preg_split('/\s*,\s*/', $raw) ?: [] as $part) {
+            if (is_numeric($part) && (int) $part > 0) {
+                $ids[] = (int) $part;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * Keep Bitrix stores that can fulfill every buyable basket line.
+     * Pickup points added by onPickupLocationsBuild are not affected.
+     */
+    public static function requireStoresWithAllProducts(): bool
+    {
+        return Option::get(self::MODULE_ID, 'stores_require_all_products', 'N') === 'Y';
     }
 }

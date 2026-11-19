@@ -1,7 +1,8 @@
 <?php
 
 /**
- * IMSHOP webhook entry. The public script is /local/imshop/<code>/index.php.
+ * IMSHOP webhook entry. The public script is /local/imshop/<path>/index.php.
+ * The webhook code is the path under /local/imshop/, for example orders/create.
  */
 
 use Bitrix\Main\Loader;
@@ -10,7 +11,11 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
     die();
 }
 
-$webhookCode = basename(dirname((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')));
+$scriptDir = str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')));
+$imshopRoot = rtrim(str_replace('\\', '/', (string) ($_SERVER['DOCUMENT_ROOT'] ?? '')), '/') . '/local/imshop';
+$webhookCode = str_starts_with($scriptDir . '/', $imshopRoot . '/')
+    ? trim(substr($scriptDir, strlen($imshopRoot)), '/')
+    : '';
 
 if (!Loader::includeModule('bx.imshop.integration')) {
     if (!headers_sent()) {
@@ -19,14 +24,54 @@ if (!Loader::includeModule('bx.imshop.integration')) {
         header('Cache-Control: no-store');
     }
 
-    $listKey = $webhookCode === 'payments' ? 'payments' : 'deliveries';
-    echo json_encode(
-        [
+    if (
+        $webhookCode === 'otp'
+        || $webhookCode === 'otp/confirm'
+        || $webhookCode === 'users'
+        || $webhookCode === 'users/update'
+        || $webhookCode === 'users/otp'
+    ) {
+        $payload = [
+            'error' => [
+                'message' => 'Модуль интеграции IMSHOP не установлен',
+            ],
+        ];
+    } elseif (
+        $webhookCode === 'payments/create'
+        || $webhookCode === 'payments/check'
+        || $webhookCode === 'users/otp/confirm'
+    ) {
+        $payload = [
+            'success' => false,
+            'error' => 'Модуль интеграции IMSHOP не установлен',
+        ];
+    } elseif ($webhookCode === 'availability') {
+        $payload = [
+            'warehouses' => [],
+            'availability' => [],
+            'message' => 'Модуль интеграции IMSHOP не установлен',
+        ];
+    } elseif ($webhookCode === 'basket') {
+        $payload = [
+            'items' => [],
+            'message' => 'Модуль интеграции IMSHOP не установлен',
+        ];
+    } elseif ($webhookCode === 'orders/status') {
+        $payload = [
+            'success' => false,
+            'error' => 'Модуль интеграции IMSHOP не установлен',
+        ];
+    } else {
+        $listKey = $webhookCode === 'payments'
+            ? 'payments'
+            : (str_starts_with($webhookCode, 'orders/') ? 'orders' : 'deliveries');
+        $payload = [
             $listKey => [],
             'message' => 'Модуль интеграции IMSHOP не установлен',
-        ],
-        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-    );
+        ];
+    }
+
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
     return;
 }

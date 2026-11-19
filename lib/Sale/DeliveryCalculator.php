@@ -8,6 +8,7 @@ use Bitrix\Sale\Delivery\Services\Manager as DeliveryManager;
 use Bitrix\Sale\DiscountCouponsManager;
 use Bitrix\Sale\Order;
 use Bitrix\Sale\Shipment;
+use Bx\Imshop\Integration\Config;
 use Bx\Imshop\Integration\Http\RequestException;
 
 /**
@@ -20,6 +21,7 @@ final class DeliveryCalculator
         private readonly CalculationOrderFactory $orders = new CalculationOrderFactory(),
         private readonly ImshopDeliveryMapper $mapper = new ImshopDeliveryMapper(),
         private readonly LocationResolver $locations = new LocationResolver(),
+        private readonly StoreStockFilter $stores = new StoreStockFilter(),
     ) {
     }
 
@@ -72,10 +74,11 @@ final class DeliveryCalculator
         $services = DeliveryManager::getRestrictedObjectsList($shipment);
         $skipPickupLocations = ($payload['skipPickupLocations'] ?? false) === true;
         $city = $this->locations->cityName($payload);
+        $coordinates = $this->locations->coordinates($payload);
         $deliveries = [];
 
         foreach ($services as $service) {
-            $quoted = $this->quoteService($order, $service, $skipPickupLocations, $city);
+            $quoted = $this->quoteService($order, $service, $skipPickupLocations, $city, $coordinates);
             if ($quoted !== null) {
                 $deliveries[] = $quoted;
             }
@@ -92,9 +95,16 @@ final class DeliveryCalculator
     }
 
     /**
+     * @param array{lat: float, lon: float}|null $coordinates
      * @return array<string, mixed>|null
      */
-    private function quoteService(Order $order, \Bitrix\Sale\Delivery\Services\Base $service, bool $skipPickupLocations, string $city): ?array
+    private function quoteService(
+        Order $order,
+        \Bitrix\Sale\Delivery\Services\Base $service,
+        bool $skipPickupLocations,
+        string $city,
+        ?array $coordinates,
+    ): ?array
     {
         $clone = $order->createClone();
         $shipment = $this->currentShipment($clone);
@@ -106,6 +116,10 @@ final class DeliveryCalculator
         $storeIds = \Bitrix\Sale\Delivery\ExtraServices\Manager::getStoresList($service->getId());
         if (is_array($storeIds) && $storeIds !== []) {
             $firstStoreId = (int) reset($storeIds);
+            if (Config::requireStoresWithAllProducts()) {
+                $ids = $this->stores->havingAllProducts($this->storeIds($storeIds), $clone);
+                $firstStoreId = $ids[0] ?? 0;
+            }
             if ($firstStoreId > 0) {
                 $shipment->setStoreId($firstStoreId);
             }
@@ -129,7 +143,31 @@ final class DeliveryCalculator
 
         $clone->doFinalAction(true);
 
-        return $this->mapper->map($service, $calculation, $clone, $skipPickupLocations, $city);
+        return $this->mapper->map(
+            $service,
+            $calculation,
+            $clone,
+            $skipPickupLocations,
+            $city,
+            is_array($coordinates) ? $coordinates['lat'] : null,
+            is_array($coordinates) ? $coordinates['lon'] : null,
+        );
+    }
+
+    /**
+     * @param array<mixed> $storeIds
+     * @return list<int>
+     */
+    private function storeIds(array $storeIds): array
+    {
+        $ids = [];
+        foreach ($storeIds as $storeId) {
+            if (is_numeric($storeId) && (int) $storeId > 0) {
+                $ids[] = (int) $storeId;
+            }
+        }
+
+        return $ids;
     }
 
     private function currentShipment(Order $order): ?Shipment

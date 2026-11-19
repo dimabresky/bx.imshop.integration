@@ -1,9 +1,10 @@
 <?php
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
-
 Loc::loadMessages(__FILE__);
 
 /**
@@ -42,8 +43,8 @@ class bx_imshop_integration extends CModule
         $this->MODULE_NAME = Loc::getMessage('BX_IMSHOP_INTEGRATION_MODULE_NAME') ?: 'IMSHOP webhooks';
         $this->MODULE_DESCRIPTION = Loc::getMessage('BX_IMSHOP_INTEGRATION_MODULE_DESC')
             ?: '1C-Bitrix online store integration with IMSHOP Retail Protocol.';
-        $this->PARTNER_NAME = Loc::getMessage('BX_IMSHOP_INTEGRATION_PARTNER_NAME') ?: 'DNK';
-        $this->PARTNER_URI = Loc::getMessage('BX_IMSHOP_INTEGRATION_PARTNER_URI') ?: 'https://dnk.by';
+        $this->PARTNER_NAME = Loc::getMessage('BX_IMSHOP_INTEGRATION_PARTNER_NAME') ?: 'dimabresky';
+        $this->PARTNER_URI = Loc::getMessage('BX_IMSHOP_INTEGRATION_PARTNER_URI') ?: 'https://github.com/dimabresky/bx.imshop.integration';
     }
 
     public function DoInstall(): bool
@@ -74,6 +75,12 @@ class bx_imshop_integration extends CModule
 
     public function unInstallDB(): bool
     {
+        $connection = Application::getConnection();
+        $table = 'b_bx_imshop_order_status';
+        if ($connection->isTableExists($table)) {
+            $connection->dropTable($table);
+        }
+
         return true;
     }
 
@@ -103,9 +110,19 @@ class bx_imshop_integration extends CModule
 
     public function installEvents(): void
     {
+        if (!Loader::includeModule($this->MODULE_ID)) {
+            return;
+        }
+
+        \Bx\Imshop\Integration\Sale\OrderStatusSync::installHandler();
     }
 
     public function unInstallEvents(): void
     {
+        if (!Loader::includeModule($this->MODULE_ID)) {
+            return;
+        }
+
+        \Bx\Imshop\Integration\Sale\OrderStatusSync::uninstallHandler();
     }
 }

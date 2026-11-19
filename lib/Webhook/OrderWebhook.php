@@ -1,0 +1,48 @@
+<?php
+
+namespace Bx\Imshop\Integration\Webhook;
+
+use Bx\Imshop\Integration\Sale\OrderCreator;
+
+/**
+ * POST /local/imshop/orders/create
+ */
+final class OrderWebhook implements WebhookHandlerInterface
+{
+    public function __construct(
+        private readonly OrderCreator $orders = new OrderCreator(),
+    ) {
+    }
+
+    public function code(): string
+    {
+        return 'orders/create';
+    }
+
+    public function responseKey(): string
+    {
+        return 'orders';
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function responseListKeys(): array
+    {
+        return [$this->responseKey()];
+    }
+
+    public function failureMessage(): string
+    {
+        return 'Не удалось оформить заказ';
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    public function handle(array $payload): array
+    {
+        return $this->orders->place($payload);
+    }
+}

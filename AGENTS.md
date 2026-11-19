@@ -8,8 +8,8 @@
 - Модуль `bx.imshop.integration` принимает webhook-и [IMSHOP Retail Protocol](https://docs.imshop.io/) от платформы IMSHOP и отвечает JSON.
 - Запросы stateless: каждый POST содержит все данные для ответа. Сессия, cookies и корзина `fuser` не источник данных.
 - Расчёт доставки повторяет последовательность `bitrix:sale.order.ajax` (`initShipment`, `getRestrictedObjectsList`, `calculateDelivery`, `doFinalAction`, склады из `obtainDelivery`) на временном заказе.
-- Временный `Bitrix\Sale\Order` не сохраняется. Вызов `Order::save()` в этом модуле запрещён.
-- Точка входа на сайте — каталог `/local/imshop/<code>/`. Его копирует `installFiles()` из `install/imshop/` и удаляет `unInstallFiles()`. Роутер модуля — `public/endpoint.php`.
+- Расчёт доставок и оплат не сохраняет заказ. `Order::save()` разрешён в `OrderCreator` и в `BePaidAcquiring` при отметке оплаты.
+- Точка входа на сайте — каталог `/local/imshop/<path>/`. Путь может быть вложенным (`orders/create`). Его копирует `installFiles()` из `install/imshop/` и удаляет `unInstallFiles()`. Роутер модуля — `public/endpoint.php`: код вебхука — путь относительно `/local/imshop/`.
 - Секреты (ключ API) только в опциях модуля на стенде, не в репозитории.
 - Ответ webhook не содержит полей заказа, которых нет в контракте IMSHOP для этого endpoint.
 
@@ -32,7 +32,7 @@ bx.imshop.integration/
 ```
 
 - Классы — в `lib/`, namespace `Bx\Imshop\Integration`.
-- Новый webhook = класс `WebhookHandlerInterface` в `lib/Webhook/`, регистрация в `Registry`, каталог `install/imshop/<code>/` и строка в `README.md`. Установка копирует каталог в `/local/imshop/`.
+- Новый webhook = класс `WebhookHandlerInterface` в `lib/Webhook/`, регистрация в `Registry`, каталог `install/imshop/<path>/` и строка в `README.md`. Установка копирует каталог в `/local/imshop/`.
 - `install/index.php` — установка и удаление. Своих таблиц у модуля нет.
 
 ## PSR и стиль кода
@@ -46,7 +46,7 @@ bx.imshop.integration/
 - **S** — HTTP только принимает JSON и вызывает обработчик. Расчёт доставки, поиск локации и маппинг ответа — отдельные классы.
 - **O** — следующий endpoint добавляется новым обработчиком, без переписывания `FrontController`.
 - **L** — обработчики взаимозаменяемы через `WebhookHandlerInterface`.
-- **I** — интерфейс webhook содержит только `code()` и `handle()`.
+- **I** — интерфейс webhook содержит `code()`, `responseKey()`, `responseListKeys()`, `failureMessage()` и `handle()`. `code()` — путь под `/local/imshop/`. `responseKey()` — основной ключ списка. `responseListKeys()` — ключи, которые очищаются в ошибке.
 - **D** — обработчик зависит от сервиса расчёта, а не от `$_POST` и не от компонента оформления заказа.
 
 ## DRY
@@ -59,7 +59,20 @@ bx.imshop.integration/
 - ORM D7 и API Sale/Catalog. Свои таблицы не заводить, пока спецификация webhook этого не требует.
 - Местоположение в свойство заказа с `IS_LOCATION` передаётся кодом справочника, не названием города.
 - Купон запроса — `DiscountCouponsManager` в `MODE_EXTERNAL` на время одного запроса, затем `clear(true)`.
-- `bonusesSpent` в расчёт доставки не входит: списание бонусов Аспро привязано к сессии чекаута.
+- Хук корзины отдаёт `bonuses.canSpend` (лимит Aspro) и не списывает баланс. `bonusesSpent` в доставках и `authorizedBonuses` при создании заказа не применяются: списание привязано к сессии чекаута. `paymentProcessed` заказ оплаченным не помечает.
+
+## HTTP-запрос
+
+Заголовки и сырое тело входящего webhook читать через D7 [`\Bitrix\Main\HttpRequest`](https://dev.1c-bitrix.ru/api_d7/bitrix/main/httprequest/index.php) ([класс](https://doc.budagov.ru/class_bitrix_1_1_main_1_1_http_request.html)):
+
+```php
+$request = \Bitrix\Main\Application::getInstance()->getContext()->getRequest();
+```
+
+- Один заголовок — `getHeader($name)`, список — `getHeaders()`.
+- Сырое тело — `HttpRequest::getInput()`.
+- Не читать заголовки из `$_SERVER['HTTP_*']` и `getallheaders()`, тело — из `php://input` и `file_get_contents`.
+- Если `getHeader('Authorization')` пустой, этот заголовок можно добрать через `getallheaders()`, затем через `$_SERVER['REDIRECT_HTTP_AUTHORIZATION']`: ядро копирует в `HttpRequest` только `$_SERVER['HTTP_*']`, а Apache часто не кладёт туда `Authorization`.
 
 ## Установка и настройки
 
@@ -70,7 +83,7 @@ bx.imshop.integration/
 ## Безопасность
 
 - Проверять ключ до бизнес-логики. Сравнивать через `hash_equals`.
-- При включённом журнале писать тело запроса и ответ в `logs/bx.imshop.integration/` рядом с корнем сайта, вне публичного каталога. Неожиданные ошибки писать туда всегда. Заголовки и ключ API писать только если включена опция «Писать заголовки и секреты».
+- При включённом журнале писать тело запроса и ответ в `/upload/bx.imshop.integration/` в корне сайта. Неожиданные ошибки писать туда всегда. Заголовки и ключ API писать только если включена опция «Писать заголовки и секреты».
 - Неизвестные позиции каталога пропускать, а не подставлять чужой товар.
 
 ## Git и delivery

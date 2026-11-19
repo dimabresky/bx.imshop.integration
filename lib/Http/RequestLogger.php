@@ -5,7 +5,7 @@ namespace Bx\Imshop\Integration\Http;
 use Bx\Imshop\Integration\Config;
 
 /**
- * File log of webhook requests and failures, outside the public document root.
+ * File log of webhook requests and failures under /upload in the site root.
  * Request lines are optional. Unexpected errors are always written.
  * Headers and the API key are written only when secret logging is enabled.
  */
@@ -62,7 +62,7 @@ final class RequestLogger
     private static function redact(array $payload): array
     {
         if (!Config::isSecretLoggingEnabled()) {
-            unset($payload['key']);
+            unset($payload['key'], $payload['otp']);
         }
 
         return $payload;
@@ -145,7 +145,7 @@ final class RequestLogger
             return null;
         }
 
-        $directory = dirname($documentRoot) . '/logs/' . Config::MODULE_ID;
+        $directory = $documentRoot . '/upload/' . Config::MODULE_ID;
         if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
             return null;
         }
