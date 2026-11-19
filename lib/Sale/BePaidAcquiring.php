@@ -27,6 +27,10 @@ final class BePaidAcquiring
 
     private const STATUS_SUCCESSFUL = 'successful';
 
+    private const SUCCESS_URL_MATCH = '[?&]payment_result=success(?:[&#]|$)';
+
+    private const FAIL_URL_MATCH = '[?&]payment_result=(?:fail|cancel)(?:[&#]|$)';
+
     /** @var list<string> */
     private const FINAL_FAILURE_STATUSES = ['error', 'failed', 'expired', 'deleted', 'declined'];
 
@@ -70,19 +74,13 @@ final class BePaidAcquiring
             return $this->failure('Способ оплаты не поддерживает онлайн-оплату');
         }
 
-        $successUrl = $this->businessValue($service, $payment, 'BEPAID_SUCCESS_URL');
-        $failureRegex = $this->failureRegex($service, $payment);
-        if ($successUrl === '' || $failureRegex === '') {
-            return $this->failure('Не заданы URL возврата платёжной системы');
-        }
-
         $lockName = $this->acquireOrderLock((int) $order->getId());
         if ($lockName === null) {
             return $this->failure('Не удалось создать платёж');
         }
 
         try {
-            return $this->issueCheckout($order, $payment, $service, $successUrl, $failureRegex);
+            return $this->issueCheckout($order, $payment, $service);
         } finally {
             $this->releaseOrderLock($lockName);
         }
@@ -95,8 +93,6 @@ final class BePaidAcquiring
         Order $order,
         Payment $payment,
         PaySystemService $service,
-        string $successUrl,
-        string $failureRegex,
     ): array {
         $reloaded = Order::load((int) $order->getId());
         if (!$reloaded instanceof Order) {
@@ -114,7 +110,7 @@ final class BePaidAcquiring
 
         $existingId = trim((string) $current->getField('PS_INVOICE_ID'));
         if ($existingId !== '') {
-            $reused = $this->reuseOpenCheckout($service, $current, $existingId, $successUrl, $failureRegex);
+            $reused = $this->reuseOpenCheckout($service, $current, $existingId);
             if ($reused !== null) {
                 return $reused;
             }
@@ -142,7 +138,7 @@ final class BePaidAcquiring
 
         $this->rememberPaymentUrl($current, $paymentUrl);
 
-        return $this->created($paymentId, $paymentUrl, $successUrl, $failureRegex);
+        return $this->created($paymentId, $paymentUrl);
     }
 
     private function lockName(int $orderId): string
@@ -223,8 +219,6 @@ final class BePaidAcquiring
         PaySystemService $service,
         Payment $payment,
         string $paymentId,
-        string $successUrl,
-        string $failureRegex,
     ): ?array {
         $shopId = $this->businessValue($service, $payment, 'BEPAID_ID');
         $secret = $this->businessValue($service, $payment, 'BEPAID_SECRET_KEY');
@@ -234,7 +228,7 @@ final class BePaidAcquiring
 
         $fetched = $this->fetchCheckout($shopId, $secret, $paymentId);
         if ($fetched['state'] === 'pending') {
-            return $this->reusedCheckout($payment, $paymentId, $successUrl, $failureRegex);
+            return $this->reusedCheckout($payment, $paymentId);
         }
 
         if ($fetched['state'] === 'error') {
@@ -247,14 +241,14 @@ final class BePaidAcquiring
 
         $checkout = $fetched['checkout'];
         if (!is_array($checkout)) {
-            return $this->reusedCheckout($payment, $paymentId, $successUrl, $failureRegex);
+            return $this->reusedCheckout($payment, $paymentId);
         }
 
         $status = strtolower($this->text($checkout['status'] ?? null));
         if ($status === self::STATUS_SUCCESSFUL) {
             $gatewayPayment = $checkout['gateway_response']['payment'] ?? null;
             if (!is_array($gatewayPayment)) {
-                return $this->reusedCheckout($payment, $paymentId, $successUrl, $failureRegex);
+                return $this->reusedCheckout($payment, $paymentId);
             }
 
             $synced = $this->applySuccessfulCheckout(
@@ -281,10 +275,10 @@ final class BePaidAcquiring
         if ($this->isBePaidUrl($paymentUrl)) {
             $this->rememberPaymentUrl($payment, $paymentUrl);
 
-            return $this->created($paymentId, $paymentUrl, $successUrl, $failureRegex);
+            return $this->created($paymentId, $paymentUrl);
         }
 
-        return $this->reusedCheckout($payment, $paymentId, $successUrl, $failureRegex);
+        return $this->reusedCheckout($payment, $paymentId);
     }
 
     /**
@@ -293,15 +287,13 @@ final class BePaidAcquiring
     private function reusedCheckout(
         Payment $payment,
         string $paymentId,
-        string $successUrl,
-        string $failureRegex,
     ): ?array {
         $paymentUrl = $this->text($payment->getField('PS_STATUS_DESCRIPTION'));
         if (!$this->isBePaidUrl($paymentUrl)) {
             return $this->failure('Не удалось создать платёж');
         }
 
-        return $this->created($paymentId, $paymentUrl, $successUrl, $failureRegex);
+        return $this->created($paymentId, $paymentUrl);
     }
 
     /**
@@ -310,15 +302,13 @@ final class BePaidAcquiring
     private function created(
         string $paymentId,
         string $paymentUrl,
-        string $successUrl,
-        string $failureRegex,
     ): array {
         return [
             'success' => true,
             'paymentId' => $paymentId,
             'paymentUrl' => $paymentUrl,
-            'successRegex' => preg_quote($successUrl, '/'),
-            'failureRegex' => $failureRegex,
+            'successUrlMatch' => self::SUCCESS_URL_MATCH,
+            'failUrlMatch' => self::FAIL_URL_MATCH,
         ];
     }
 
@@ -602,24 +592,6 @@ final class BePaidAcquiring
         $host = strtolower((string) ($parts['host'] ?? ''));
 
         return $scheme === 'https' && ($host === 'bepaid.by' || str_ends_with($host, '.bepaid.by'));
-    }
-
-    private function failureRegex(PaySystemService $service, Payment $payment): string
-    {
-        $parts = [];
-        foreach (['BEPAID_DECLINE_URL', 'BEPAID_FAIL_URL', 'BEPAID_CANCEL_URL'] as $code) {
-            $url = $this->businessValue($service, $payment, $code);
-            if ($url === '') {
-                continue;
-            }
-
-            $quoted = preg_quote($url, '/');
-            if (!in_array($quoted, $parts, true)) {
-                $parts[] = $quoted;
-            }
-        }
-
-        return implode('|', $parts);
     }
 
     private function businessValue(PaySystemService $service, Payment $payment, string $code): string
