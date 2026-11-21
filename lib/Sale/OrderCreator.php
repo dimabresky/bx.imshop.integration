@@ -3,6 +3,7 @@
 namespace Bx\Imshop\Integration\Sale;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Sale\BasketItem;
 use Bitrix\Sale\Delivery\Services\Manager as DeliveryManager;
@@ -142,6 +143,7 @@ final class OrderCreator
             $order->doFinalAction(true);
             $this->gifts->applyToOrder($order, $source);
             $this->applyPayment($order, $source);
+            $this->notifyBeforeSave($order, $source);
 
             $save = $order->save();
             if (!$save->isSuccess()) {
@@ -276,6 +278,20 @@ final class OrderCreator
         if (!$calculated->isSuccess()) {
             throw new RequestException('Не удалось применить способ доставки', 200);
         }
+    }
+
+    /**
+     * Handlers may write a custom pickup point onto the order. The result is ignored.
+     *
+     * @param array<string, mixed> $source
+     */
+    private function notifyBeforeSave(Order $order, array $source): void
+    {
+        $event = new Event(Config::MODULE_ID, 'onOrderBeforeSave', [
+            'ORDER' => $order,
+            'PAYLOAD' => $source,
+        ]);
+        $event->send();
     }
 
     /**
