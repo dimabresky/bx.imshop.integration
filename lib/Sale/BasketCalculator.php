@@ -158,6 +158,9 @@ final class BasketCalculator
             if (!is_array($item)) {
                 continue;
             }
+            if (($item['selected'] ?? true) === false) {
+                continue;
+            }
             $id = trim((string) ($item['id'] ?? ''));
             $subtotal = $item['subtotal'] ?? null;
             if ($id !== '' && is_numeric($subtotal) && round((float) $subtotal, 2) == 0.01) {

@@ -141,7 +141,9 @@ final class BasketGifts
                     continue;
                 }
                 if ($this->hasKopeckTwin($basketItems, $productId, $index)) {
-                    $basketItems[$index]->delete();
+                    if (!$this->payloadHasPaid($payload, $productId)) {
+                        $basketItems[$index]->delete();
+                    }
                     unset($granted[$productId]);
                     continue;
                 }
@@ -449,14 +451,35 @@ final class BasketGifts
             }
         }
         foreach ($extra as $productId => $rows) {
-            $surplus = min(count($rows) - ($paid[$productId] ?? 0), $echoes[$productId]);
-            if ($surplus < 1) {
+            // shortcut: a paid line of the same sku is indistinguishable from the echo after discount
+            if (($paid[$productId] ?? 0) > 0) {
                 continue;
             }
-            foreach (array_slice($rows, $paid[$productId] ?? 0, $surplus) as $row) {
+            foreach ($rows as $row) {
                 $row->delete();
             }
         }
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function payloadHasPaid(array $payload, int $productId): bool
+    {
+        $items = $payload['items'] ?? null;
+        if (!is_array($items)) {
+            return false;
+        }
+        foreach ($items as $item) {
+            if (!is_array($item) || $this->isEcho($item) || !$this->hasQuantity($item)) {
+                continue;
+            }
+            if ($this->items->catalogProductId($item) === $productId) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
