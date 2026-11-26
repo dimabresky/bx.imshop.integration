@@ -303,12 +303,10 @@ final class BePaidAcquiring
         string $paymentId,
         string $paymentUrl,
     ): array {
-        // shortcut: test checkout page, restore the commented line when bePaid should open
         return [
             'success' => true,
             'paymentId' => $paymentId,
-            // 'paymentUrl' => $paymentUrl,
-            'paymentUrl' => 'https://dnk.by/local/tpayment/',
+            'paymentUrl' => $paymentUrl,
             'successRegex' => self::SUCCESS_REGEX,
             'failureRegex' => self::FAILURE_REGEX,
         ];
