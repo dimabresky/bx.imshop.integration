@@ -151,7 +151,7 @@ final class BasketGifts
                 unset($granted[$productId]);
                 continue;
             }
-            if ($dropStale) {
+            if ($dropStale && !$this->pricedAtKopeck($basketItems[$index])) {
                 $basketItems[$index]->delete();
             }
         }
@@ -510,7 +510,7 @@ final class BasketGifts
     private function rezeroCustom(array $basketItems): void
     {
         foreach ($basketItems as $basketItem) {
-            if ((string) $basketItem->getField('CUSTOM_PRICE') === 'Y') {
+            if ((string) $basketItem->getField('CUSTOM_PRICE') === 'Y' && !$this->pricedAtKopeck($basketItem)) {
                 $this->zero($basketItem);
             }
         }
