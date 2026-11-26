@@ -27,9 +27,9 @@ final class BePaidAcquiring
 
     private const STATUS_SUCCESSFUL = 'successful';
 
-    private const SUCCESS_URL_MATCH = '[?&]payment_result=success(?:[&#]|$)';
+    private const SUCCESS_REGEX = '^https://dnk\\.by/auth/?(?:[?#]|$)';
 
-    private const FAIL_URL_MATCH = '[?&]payment_result=(?:fail|cancel)(?:[&#]|$)';
+    private const FAILURE_REGEX = '[?&]payment_result=(?:fail|cancel)(?:[&#]|$)';
 
     /** @var list<string> */
     private const FINAL_FAILURE_STATUSES = ['error', 'failed', 'expired', 'deleted', 'declined'];
@@ -309,8 +309,8 @@ final class BePaidAcquiring
             'paymentId' => $paymentId,
             // 'paymentUrl' => $paymentUrl,
             'paymentUrl' => 'https://dnk.by/local/tpayment/',
-            'successUrlMatch' => self::SUCCESS_URL_MATCH,
-            'failUrlMatch' => self::FAIL_URL_MATCH,
+            'successRegex' => self::SUCCESS_REGEX,
+            'failureRegex' => self::FAILURE_REGEX,
         ];
     }
 
