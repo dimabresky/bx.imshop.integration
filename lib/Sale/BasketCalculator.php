@@ -153,8 +153,22 @@ final class BasketCalculator
             $responseItems[] = $extra;
         }
 
+        $calculatedIds = [];
+        foreach ($responseItems as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $id = trim((string) ($item['id'] ?? ''));
+            if ($id !== '') {
+                $calculatedIds[$id] = true;
+            }
+        }
         foreach ($giftLines as $giftLine) {
             if (!is_array($giftLine)) {
+                continue;
+            }
+            $id = trim((string) ($giftLine['id'] ?? ''));
+            if ($id !== '' && isset($calculatedIds[$id])) {
                 continue;
             }
             $this->addToTotals($giftLine, $totalPrice, $discount);

@@ -124,6 +124,7 @@ final class BasketGifts
         $resolved = $this->items->resolve($payload);
         if (count($resolved) !== count($basketItems)) {
             $this->rezeroCustom($basketItems);
+            $this->dropRepeatedGift($basketItems, $payload, $granted);
 
             return;
         }
@@ -135,7 +136,12 @@ final class BasketGifts
                 continue;
             }
             if (isset($granted[$productId])) {
-                $this->zero($basketItems[$index]);
+                if (
+                    !$this->pricedAtKopeck($basketItems[$index])
+                    && !$this->hasKopeckTwin($basketItems, $productId, $index)
+                ) {
+                    $this->zero($basketItems[$index]);
+                }
                 unset($granted[$productId]);
                 continue;
             }
@@ -143,6 +149,7 @@ final class BasketGifts
                 $basketItems[$index]->delete();
             }
         }
+        $this->dropRepeatedGift($basketItems, $payload, $granted);
     }
 
     /**
@@ -396,6 +403,79 @@ final class BasketGifts
         $raw = $item['quantity'] ?? 0;
 
         return is_numeric($raw) && (float) $raw > 0;
+    }
+
+    /**
+     * The calculated gift stays at 0.01. A repeated echo of that product is removed.
+     *
+     * @param list<BasketItem> $basketItems
+     * @param array<string, mixed> $payload
+     * @param array<int, true> $granted
+     */
+    private function dropRepeatedGift(array $basketItems, array $payload, array $granted): void
+    {
+        $paid = [];
+        $echoes = [];
+        $items = $payload['items'] ?? null;
+        if (!is_array($items)) {
+            return;
+        }
+        foreach ($items as $item) {
+            if (!is_array($item) || !$this->hasQuantity($item)) {
+                continue;
+            }
+            $productId = $this->items->catalogProductId($item);
+            if ($productId <= 0 || !isset($granted[$productId])) {
+                continue;
+            }
+            if ($this->isEcho($item)) {
+                $echoes[$productId] = ($echoes[$productId] ?? 0) + 1;
+            } else {
+                $paid[$productId] = ($paid[$productId] ?? 0) + 1;
+            }
+        }
+
+        $extra = [];
+        foreach ($basketItems as $item) {
+            $productId = (int) $item->getProductId();
+            if (($echoes[$productId] ?? 0) < 1 || !$this->hasKopeckTwin($basketItems, $productId, -1)) {
+                continue;
+            }
+            if (!$this->pricedAtKopeck($item)) {
+                $extra[$productId][] = $item;
+            }
+        }
+        foreach ($extra as $productId => $rows) {
+            $surplus = min(count($rows) - ($paid[$productId] ?? 0), $echoes[$productId]);
+            if ($surplus < 1) {
+                continue;
+            }
+            foreach (array_slice($rows, -$surplus) as $row) {
+                $row->delete();
+            }
+        }
+    }
+
+    /**
+     * @param list<BasketItem> $basketItems
+     */
+    private function hasKopeckTwin(array $basketItems, int $productId, int $exceptIndex): bool
+    {
+        foreach ($basketItems as $index => $item) {
+            if ($index === $exceptIndex) {
+                continue;
+            }
+            if ((int) $item->getProductId() === $productId && $this->pricedAtKopeck($item)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function pricedAtKopeck(BasketItem $item): bool
+    {
+        return PriceMaths::roundPrecision((float) $item->getPrice()) == 0.01;
     }
 
     /**
