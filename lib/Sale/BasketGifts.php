@@ -4,6 +4,8 @@ namespace Bx\Imshop\Integration\Sale;
 
 use Bitrix\Catalog\ProductTable;
 use Bitrix\Iblock\ElementTable;
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
 use Bitrix\Sale\BasketItem;
 use Bitrix\Sale\Order;
@@ -91,6 +93,45 @@ final class BasketGifts
             'groups' => $groupsOut,
             'lines' => $lines,
         ];
+    }
+
+    /**
+     * Handlers may change the basket. The last successful GIFTS array replaces gift lines.
+     *
+     * @param array<string, mixed> $payload
+     * @param list<int> $groups
+     * @return array{groups: list<list<array<string, mixed>>>, lines: list<array<string, mixed>>}
+     */
+    public function notifyCalculated(Order $order, array $payload, array $groups): array
+    {
+        $gifts = $this->present($order, $payload, $groups);
+        $event = new Event(Config::MODULE_ID, 'onBasketCalculated', [
+            'ORDER' => $order,
+            'PAYLOAD' => $payload,
+            'GIFTS' => $gifts,
+        ]);
+        $event->send();
+
+        foreach ($event->getResults() as $result) {
+            if (!$result instanceof EventResult || $result->getType() !== EventResult::SUCCESS) {
+                continue;
+            }
+
+            $parameters = $result->getParameters();
+            $next = is_array($parameters) ? ($parameters['GIFTS'] ?? null) : null;
+            if (
+                !is_array($next)
+                || !isset($next['groups'], $next['lines'])
+                || !is_array($next['groups'])
+                || !is_array($next['lines'])
+            ) {
+                continue;
+            }
+
+            $gifts = $next;
+        }
+
+        return $gifts;
     }
 
     /**

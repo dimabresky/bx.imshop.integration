@@ -218,6 +218,8 @@ final class BasketCalculator
             ];
         }
 
+        $gifts = $this->gifts->notifyCalculated($order, $payload, $groups);
+
         /** @var BasketItem $basketItem */
         foreach ($basket as $basketItem) {
             if ($basketItem->isBundleChild()) {
@@ -251,7 +253,7 @@ final class BasketCalculator
             'lines' => $lines,
             'extras' => $extras,
             'canSpend' => is_array($quote) ? (float) $quote['canSpend'] : null,
-            'gifts' => $this->gifts->present($order, $payload, $groups),
+            'gifts' => $gifts,
         ];
     }
 
