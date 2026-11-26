@@ -153,14 +153,15 @@ final class BasketCalculator
             $responseItems[] = $extra;
         }
 
-        $calculatedIds = [];
+        $calculatedGiftIds = [];
         foreach ($responseItems as $item) {
             if (!is_array($item)) {
                 continue;
             }
             $id = trim((string) ($item['id'] ?? ''));
-            if ($id !== '') {
-                $calculatedIds[$id] = true;
+            $subtotal = $item['subtotal'] ?? null;
+            if ($id !== '' && is_numeric($subtotal) && round((float) $subtotal, 2) == 0.01) {
+                $calculatedGiftIds[$id] = true;
             }
         }
         foreach ($giftLines as $giftLine) {
@@ -168,7 +169,7 @@ final class BasketCalculator
                 continue;
             }
             $id = trim((string) ($giftLine['id'] ?? ''));
-            if ($id !== '' && isset($calculatedIds[$id])) {
+            if ($id !== '' && isset($calculatedGiftIds[$id])) {
                 continue;
             }
             $this->addToTotals($giftLine, $totalPrice, $discount);

@@ -136,12 +136,16 @@ final class BasketGifts
                 continue;
             }
             if (isset($granted[$productId])) {
-                if (
-                    !$this->pricedAtKopeck($basketItems[$index])
-                    && !$this->hasKopeckTwin($basketItems, $productId, $index)
-                ) {
-                    $this->zero($basketItems[$index]);
+                if ($this->pricedAtKopeck($basketItems[$index])) {
+                    unset($granted[$productId]);
+                    continue;
                 }
+                if ($this->hasKopeckTwin($basketItems, $productId, $index)) {
+                    $basketItems[$index]->delete();
+                    unset($granted[$productId]);
+                    continue;
+                }
+                $this->zero($basketItems[$index]);
                 unset($granted[$productId]);
                 continue;
             }
@@ -149,7 +153,6 @@ final class BasketGifts
                 $basketItems[$index]->delete();
             }
         }
-        $this->dropRepeatedGift($basketItems, $payload, $granted);
     }
 
     /**
@@ -450,7 +453,7 @@ final class BasketGifts
             if ($surplus < 1) {
                 continue;
             }
-            foreach (array_slice($rows, -$surplus) as $row) {
+            foreach (array_slice($rows, $paid[$productId] ?? 0, $surplus) as $row) {
                 $row->delete();
             }
         }
